@@ -4,7 +4,7 @@ targets:
     name: "Tau 4R repeat domain (K18)"
     uniprot: "P10636"
     region: [244, 372]
-    length: 129
+    length: 126
     ped_id: "PED00017"
     disease: "Alzheimer's"
     sequence: >-
@@ -12,7 +12,6 @@ targets:
       VQIVYKPVDLSKVTSKCGSLGNIHHKPGGGQVEVKSEKLDFKDRVQSKIGSLDNITHVPGGGNK
     mutations:
       - { id: "P301L", pos: 58, wt: "P", mt: "L", agg_rate_relative: 3.5 }
-      - { id: "R406W", pos: 163, wt: "R", mt: "W", agg_rate_relative: 1.8 }
       - { id: "V337M", pos: 94, wt: "V", mt: "M", agg_rate_relative: 2.0 }
       - { id: "G272V", pos: 29, wt: "G", mt: "V", agg_rate_relative: 2.5 }
 
