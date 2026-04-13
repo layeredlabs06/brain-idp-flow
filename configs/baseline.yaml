@@ -1,0 +1,11 @@
+# Phase 1 ESMFold baseline configuration
+esmfold:
+  model: "esmfold_v1"
+  n_ensemble: 50
+  dropout_ensemble: true
+  mutation_ensemble: false
+  device: "cuda"
+
+output:
+  dir: "samples/baseline"
+  format: "npz"

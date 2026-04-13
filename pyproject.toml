@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brain-idp-flow"
+version = "0.1.0"
+description = "Mutation-conditioned flow matching for brain IDP structural ensembles"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1",
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "matplotlib>=3.7",
+    "biopython>=1.81",
+    "pyyaml>=6.0",
+    "tqdm>=4.65",
+]
+
+[project.optional-dependencies]
+esm = ["fair-esm>=2.0"]
+md = ["mdtraj>=1.9"]
+tb = ["tensorboard>=2.14"]
+dev = ["pytest>=7.4"]
+all = ["brain-idp-flow[esm,md,tb,dev]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

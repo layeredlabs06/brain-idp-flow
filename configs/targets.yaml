@@ -1,0 +1,49 @@
+# Brain IDP targets for mutation-conditioned ensemble generation
+targets:
+  tau_K18:
+    name: "Tau 4R repeat domain (K18)"
+    uniprot: "P10636"
+    region: [244, 372]
+    length: 129
+    ped_id: "PED00017"
+    disease: "Alzheimer's"
+    sequence: >-
+      QTAPVPMPDLKNVKSKIGSTENLKHQPGGGKVQIINKKLDLSNVQSKCGSKDNIKHVPGGGS
+      VQIVYKPVDLSKVTSKCGSLGNIHHKPGGGQVEVKSEKLDFKDRVQSKIGSLDNITHVPGGGNK
+    mutations:
+      - { id: "P301L", pos: 58, wt: "P", mt: "L", agg_rate_relative: 3.5 }
+      - { id: "R406W", pos: 163, wt: "R", mt: "W", agg_rate_relative: 1.8 }
+      - { id: "V337M", pos: 94, wt: "V", mt: "M", agg_rate_relative: 2.0 }
+      - { id: "G272V", pos: 29, wt: "G", mt: "V", agg_rate_relative: 2.5 }
+
+  asyn:
+    name: "α-Synuclein full-length"
+    uniprot: "P37840"
+    region: [1, 140]
+    length: 140
+    ped_id: "PED00024"
+    disease: "Parkinson's"
+    sequence: >-
+      MDVFMKGLSKAKEGVVAAAEKTKQGVAEAAGKTKEGVLYVGSKTKEGVVHGVATVAEKTK
+      EQVTNVGGAVVTGVTAVAQKTVEGAGSIAAATGFVKKDQLGKNEEGAPQEGILEDMPVDP
+      DNEAYEMPSEEGYQDYEPEA
+    mutations:
+      - { id: "A53T", pos: 53, wt: "A", mt: "T", agg_rate_relative: 2.0 }
+      - { id: "A30P", pos: 30, wt: "A", mt: "P", agg_rate_relative: 1.5 }
+      - { id: "E46K", pos: 46, wt: "E", mt: "K", agg_rate_relative: 2.5 }
+      - { id: "H50Q", pos: 50, wt: "H", mt: "Q", agg_rate_relative: 1.8 }
+      - { id: "G51D", pos: 51, wt: "G", mt: "D", agg_rate_relative: 1.3 }
+
+  abeta42:
+    name: "Amyloid-β 1-42"
+    uniprot: "P05067"
+    region: [672, 713]
+    length: 42
+    ped_id: "PED00003"
+    disease: "Alzheimer's"
+    sequence: "DAEFRHDSGYEVHHQKLVFFAEDVGSNKGAIIGLMVGGVVIA"
+    mutations:
+      - { id: "E22G", pos: 22, wt: "E", mt: "G", agg_rate_relative: 6.0, alias: "Arctic" }
+      - { id: "E22Q", pos: 22, wt: "E", mt: "Q", agg_rate_relative: 4.0, alias: "Dutch" }
+      - { id: "E22K", pos: 22, wt: "E", mt: "K", agg_rate_relative: 3.0, alias: "Italian" }
+      - { id: "D23N", pos: 23, wt: "D", mt: "N", agg_rate_relative: 5.0, alias: "Iowa" }

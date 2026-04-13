@@ -1,0 +1,36 @@
+# Flow matching training configuration
+model:
+  d_model: 256
+  n_heads: 8
+  n_layers: 6
+  d_seq_in: 480        # ESM-2 35M output dim
+  dropout: 0.1
+  rbf_bins: 16
+  rbf_max: 20.0
+  mutation_embed_dim: 32
+
+training:
+  batch_size: 8
+  grad_accum: 4
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  max_steps: 50000
+  warmup_steps: 1000
+  scheduler: cosine
+  amp: true
+  grad_clip: 1.0
+  ema_decay: 0.999
+  val_every: 500
+  ckpt_every: 2500
+  log_dir: "runs/flow"
+
+data:
+  max_len: 160
+  train_npz: "data/train.npz"
+  val_fraction: 0.1
+  augment_rotation: true
+
+sampling:
+  n_steps: 50
+  method: "euler"       # euler or heun
+  n_samples: 200

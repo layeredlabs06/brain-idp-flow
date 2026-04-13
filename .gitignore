@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pt
+*.npz
+*.npy
+data/pdb/
+data/ped/
+runs/
+samples/
+.pytest_cache/
+*.log
+.env
