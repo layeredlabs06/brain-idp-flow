@@ -1,4 +1,4 @@
-# Brain IDP targets — expanded mutation panel (30+)
+# Brain IDP targets — expanded mutation panel (41 mutations)
 # Aggregation rates: relative to WT (ThT kinetics / seeding assays)
 # Sources annotated per mutation for traceability
 targets:
@@ -24,6 +24,11 @@ targets:
       - { id: "Q336R", pos: 93, wt: "Q", mt: "R", agg_rate_relative: 1.4, source: "Pickering-Brown2004" }
       - { id: "N296H", pos: 53, wt: "N", mt: "H", agg_rate_relative: 2.0, source: "Iseki2001" }
       - { id: "N279K", pos: 36, wt: "N", mt: "K", agg_rate_relative: 2.8, source: "Iseki2001" }
+      - { id: "I260V", pos: 17, wt: "I", mt: "V", agg_rate_relative: 2.0, source: "Zeng2023" }
+      - { id: "L315R", pos: 72, wt: "L", mt: "R", agg_rate_relative: 1.8, source: "Chang2008" }
+      - { id: "E342V", pos: 99, wt: "E", mt: "V", agg_rate_relative: 0.8, source: "Chang2008" }
+      - { id: "S352L", pos: 109, wt: "S", mt: "L", agg_rate_relative: 0.9, source: "Chang2008" }
+      - { id: "K369I", pos: 126, wt: "K", mt: "I", agg_rate_relative: 0.1, source: "Chang2008" }
 
   asyn:
     name: "α-Synuclein full-length"
@@ -46,7 +51,10 @@ targets:
       - { id: "A53V", pos: 53, wt: "A", mt: "V", agg_rate_relative: 2.2, source: "Yoshino2017" }
       - { id: "E83Q", pos: 83, wt: "E", mt: "Q", agg_rate_relative: 1.5, source: "Kapasi2020" }
       - { id: "T72M", pos: 72, wt: "T", mt: "M", agg_rate_relative: 1.1, source: "Fevga2021" }
-      - { id: "G46E", pos: 46, wt: "G", mt: "E", agg_rate_relative: 2.0, source: "Flagmeier2016" }
+      - { id: "V15A", pos: 15, wt: "V", mt: "A", agg_rate_relative: 1.8, source: "Menges2023" }
+      - { id: "A18T", pos: 18, wt: "A", mt: "T", agg_rate_relative: 1.6, source: "Kumar2018" }
+      - { id: "A29S", pos: 29, wt: "A", mt: "S", agg_rate_relative: 1.4, source: "Kumar2018" }
+      - { id: "A30G", pos: 30, wt: "A", mt: "G", agg_rate_relative: 0.7, source: "Boyer2020" }
       - { id: "S129D", pos: 129, wt: "S", mt: "D", agg_rate_relative: 1.2, source: "Oueslati2016", note: "phospho-mimetic" }
 
   abeta42:
@@ -67,3 +75,4 @@ targets:
       - { id: "H6R", pos: 6, wt: "H", mt: "R", agg_rate_relative: 1.8, source: "Janssen2003", alias: "English" }
       - { id: "A2V", pos: 2, wt: "A", mt: "V", agg_rate_relative: 3.0, source: "DiPrimio2011" }
       - { id: "L34V", pos: 34, wt: "L", mt: "V", agg_rate_relative: 0.7, source: "Bhatt2022" }
+      - { id: "D7H", pos: 7, wt: "D", mt: "H", agg_rate_relative: 0.3, source: "Hsu2012", alias: "Taiwanese" }
