@@ -46,6 +46,7 @@ targets:
       - { id: "A53V", pos: 53, wt: "A", mt: "V", agg_rate_relative: 2.2, source: "Yoshino2017" }
       - { id: "E83Q", pos: 83, wt: "E", mt: "Q", agg_rate_relative: 1.5, source: "Kapasi2020" }
       - { id: "T72M", pos: 72, wt: "T", mt: "M", agg_rate_relative: 1.1, source: "Fevga2021" }
+      - { id: "G46E", pos: 46, wt: "G", mt: "E", agg_rate_relative: 2.0, source: "Flagmeier2016" }
       - { id: "S129D", pos: 129, wt: "S", mt: "D", agg_rate_relative: 1.2, source: "Oueslati2016", note: "phospho-mimetic" }
 
   abeta42:
