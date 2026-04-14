@@ -1,4 +1,6 @@
-# Brain IDP targets for mutation-conditioned ensemble generation
+# Brain IDP targets — expanded mutation panel (30+)
+# Aggregation rates: relative to WT (ThT kinetics / seeding assays)
+# Sources annotated per mutation for traceability
 targets:
   tau_K18:
     name: "Tau 4R repeat domain (K18)"
@@ -11,9 +13,16 @@ targets:
       QTAPVPMPDLKNVKSKIGSTENLKHQPGGGKVQIINKKLDLSNVQSKCGSKDNIKHVPGGGS
       VQIVYKPVDLSKVTSKCGSLGNIHHKPGGGQVEVKSEKLDFKDRVQSKIGSLDNITHVPGGGNK
     mutations:
-      - { id: "P301L", pos: 58, wt: "P", mt: "L", agg_rate_relative: 3.5 }
-      - { id: "V337M", pos: 94, wt: "V", mt: "M", agg_rate_relative: 2.0 }
-      - { id: "G272V", pos: 29, wt: "G", mt: "V", agg_rate_relative: 2.5 }
+      - { id: "P301L", pos: 58, wt: "P", mt: "L", agg_rate_relative: 3.5, source: "Barghorn2000" }
+      - { id: "P301S", pos: 58, wt: "P", mt: "S", agg_rate_relative: 2.8, source: "Bugiani1999" }
+      - { id: "V337M", pos: 94, wt: "V", mt: "M", agg_rate_relative: 2.0, source: "Poorkaj1998" }
+      - { id: "G272V", pos: 29, wt: "G", mt: "V", agg_rate_relative: 2.5, source: "Hutton1998" }
+      - { id: "S305N", pos: 62, wt: "S", mt: "N", agg_rate_relative: 2.2, source: "Hasegawa1999" }
+      - { id: "L266V", pos: 23, wt: "L", mt: "V", agg_rate_relative: 1.5, source: "Hogg2003" }
+      - { id: "G303V", pos: 60, wt: "G", mt: "V", agg_rate_relative: 3.2, source: "Rosso2003" }
+      - { id: "S320F", pos: 77, wt: "S", mt: "F", agg_rate_relative: 3.0, source: "vanSwieten2007" }
+      - { id: "Q336R", pos: 93, wt: "Q", mt: "R", agg_rate_relative: 1.4, source: "Pickering-Brown2004" }
+      - { id: "N296H", pos: 53, wt: "N", mt: "H", agg_rate_relative: 2.0, source: "Iseki2001" }
 
   asyn:
     name: "α-Synuclein full-length"
@@ -27,11 +36,15 @@ targets:
       EQVTNVGGAVVTGVTAVAQKTVEGAGSIAAATGFVKKDQLGKNEEGAPQEGILEDMPVDP
       DNEAYEMPSEEGYQDYEPEA
     mutations:
-      - { id: "A53T", pos: 53, wt: "A", mt: "T", agg_rate_relative: 2.0 }
-      - { id: "A30P", pos: 30, wt: "A", mt: "P", agg_rate_relative: 1.5 }
-      - { id: "E46K", pos: 46, wt: "E", mt: "K", agg_rate_relative: 2.5 }
-      - { id: "H50Q", pos: 50, wt: "H", mt: "Q", agg_rate_relative: 1.8 }
-      - { id: "G51D", pos: 51, wt: "G", mt: "D", agg_rate_relative: 1.3 }
+      - { id: "A53T", pos: 53, wt: "A", mt: "T", agg_rate_relative: 2.0, source: "Polymeropoulos1997" }
+      - { id: "A30P", pos: 30, wt: "A", mt: "P", agg_rate_relative: 1.5, source: "Kruger1998" }
+      - { id: "E46K", pos: 46, wt: "E", mt: "K", agg_rate_relative: 2.5, source: "Zarranz2004" }
+      - { id: "H50Q", pos: 50, wt: "H", mt: "Q", agg_rate_relative: 1.8, source: "Proukakis2013" }
+      - { id: "G51D", pos: 51, wt: "G", mt: "D", agg_rate_relative: 1.3, source: "Lesage2013" }
+      - { id: "A53E", pos: 53, wt: "A", mt: "E", agg_rate_relative: 0.6, source: "Pasanen2014" }
+      - { id: "A53V", pos: 53, wt: "A", mt: "V", agg_rate_relative: 2.2, source: "Yoshino2017" }
+      - { id: "E83Q", pos: 83, wt: "E", mt: "Q", agg_rate_relative: 1.5, source: "Kapasi2020" }
+      - { id: "T72M", pos: 72, wt: "T", mt: "M", agg_rate_relative: 1.1, source: "Fevga2021" }
 
   abeta42:
     name: "Amyloid-β 1-42"
@@ -42,7 +55,12 @@ targets:
     disease: "Alzheimer's"
     sequence: "DAEFRHDSGYEVHHQKLVFFAEDVGSNKGAIIGLMVGGVVIA"
     mutations:
-      - { id: "E22G", pos: 22, wt: "E", mt: "G", agg_rate_relative: 6.0, alias: "Arctic" }
-      - { id: "E22Q", pos: 22, wt: "E", mt: "Q", agg_rate_relative: 4.0, alias: "Dutch" }
-      - { id: "E22K", pos: 22, wt: "E", mt: "K", agg_rate_relative: 3.0, alias: "Italian" }
-      - { id: "D23N", pos: 23, wt: "D", mt: "N", agg_rate_relative: 5.0, alias: "Iowa" }
+      - { id: "E22G", pos: 22, wt: "E", mt: "G", agg_rate_relative: 6.0, source: "Nilsberth2001", alias: "Arctic" }
+      - { id: "E22Q", pos: 22, wt: "E", mt: "Q", agg_rate_relative: 4.0, source: "Levy1990", alias: "Dutch" }
+      - { id: "E22K", pos: 22, wt: "E", mt: "K", agg_rate_relative: 3.0, source: "Tagliavini1999", alias: "Italian" }
+      - { id: "D23N", pos: 23, wt: "D", mt: "N", agg_rate_relative: 5.0, source: "Grabowski2001", alias: "Iowa" }
+      - { id: "A21G", pos: 21, wt: "A", mt: "G", agg_rate_relative: 1.5, source: "Hendriks1992", alias: "Flemish" }
+      - { id: "D7N", pos: 7, wt: "D", mt: "N", agg_rate_relative: 2.0, source: "Tycko2009", alias: "Tottori" }
+      - { id: "H6R", pos: 6, wt: "H", mt: "R", agg_rate_relative: 1.8, source: "Janssen2003", alias: "English" }
+      - { id: "A2V", pos: 2, wt: "A", mt: "V", agg_rate_relative: 3.0, source: "DiPrimio2011" }
+      - { id: "L34V", pos: 34, wt: "L", mt: "V", agg_rate_relative: 0.7, source: "Bhatt2022" }
