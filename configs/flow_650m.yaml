@@ -1,0 +1,36 @@
+# Flow matching training configuration — ESM-2 650M version
+model:
+  d_model: 384          # wider for richer embeddings
+  n_heads: 8
+  n_layers: 8           # deeper
+  d_seq_in: 1280        # ESM-2 650M output dim
+  dropout: 0.1
+  rbf_bins: 16
+  rbf_max: 20.0
+  mutation_embed_dim: 32
+
+training:
+  batch_size: 4         # smaller batch for T4 VRAM
+  grad_accum: 8         # effective batch = 32
+  lr: 5.0e-5            # lower lr for bigger model
+  weight_decay: 1.0e-2
+  max_steps: 50000
+  warmup_steps: 2000
+  scheduler: cosine
+  amp: true
+  grad_clip: 1.0
+  ema_decay: 0.999
+  val_every: 500
+  ckpt_every: 2500
+  log_dir: "runs/flow_650m"
+
+data:
+  max_len: 160
+  train_npz: "data/train.npz"
+  val_fraction: 0.1
+  augment_rotation: true
+
+sampling:
+  n_steps: 50
+  method: "euler"
+  n_samples: 200
