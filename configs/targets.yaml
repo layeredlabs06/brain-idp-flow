@@ -38,7 +38,7 @@ targets:
     uniprot: "P05067"
     region: [672, 713]
     length: 42
-    ped_id: "PED00003"
+    ped_id: "PED00531"
     disease: "Alzheimer's"
     sequence: "DAEFRHDSGYEVHHQKLVFFAEDVGSNKGAIIGLMVGGVVIA"
     mutations:

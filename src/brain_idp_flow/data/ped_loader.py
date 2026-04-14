@@ -10,35 +10,39 @@ import io
 import numpy as np
 
 
-PED_URL = "https://proteinensemble.org/api/v1/entries/{ped_id}/ensemble"
+PED_URL = "https://deposition.proteinensemble.org/api/v1/entries/{ped_id}/download-ensembles/"
 
 
 def download_ped_ensemble(
     ped_id: str,
     cache_dir: str | Path = "data/ped",
 ) -> Path:
-    """Download PED ensemble file, return cached path."""
+    """Download PED ensemble tar.gz, extract PDB files, return directory."""
+    import tarfile
+
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    out_path = cache_dir / f"{ped_id}.cif"
+    extract_dir = cache_dir / ped_id
 
-    if out_path.exists():
-        return out_path
+    if extract_dir.exists() and any(extract_dir.glob("*.pdb")):
+        return extract_dir
 
     url = PED_URL.format(ped_id=ped_id)
+    tar_path = cache_dir / f"{ped_id}.tar.gz"
+
     try:
-        response = urllib.request.urlopen(url)
-        data = response.read()
-        # Try to decompress if gzipped
-        try:
-            data = gzip.decompress(data)
-        except gzip.BadGzipFile:
-            pass
-        out_path.write_bytes(data)
+        req = urllib.request.Request(url, headers={"User-Agent": "brain-idp-flow/0.1"})
+        response = urllib.request.urlopen(req, timeout=60)
+        tar_path.write_bytes(response.read())
     except Exception as e:
         raise RuntimeError(f"Failed to download PED entry {ped_id}: {e}") from e
 
-    return out_path
+    extract_dir.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(str(tar_path), "r:gz") as tar:
+        tar.extractall(str(extract_dir))
+
+    tar_path.unlink()
+    return extract_dir
 
 
 def load_ped_ensemble(
@@ -49,10 +53,44 @@ def load_ped_ensemble(
 
     Returns: (N_frames, L, 3) float32 array.
     """
-    from brain_idp_flow.data.pdb_loader import extract_all_models_ca
+    from Bio.PDB import PDBParser
 
-    cif_path = download_ped_ensemble(ped_id, cache_dir)
-    return extract_all_models_ca(cif_path)
+    extract_dir = download_ped_ensemble(ped_id, cache_dir)
+
+    # Find all PDB files recursively
+    pdb_files = sorted(Path(extract_dir).rglob("*.pdb"))
+    if not pdb_files:
+        # Try mmCIF
+        cif_files = sorted(Path(extract_dir).rglob("*.cif"))
+        if cif_files:
+            from brain_idp_flow.data.pdb_loader import extract_all_models_ca
+            return extract_all_models_ca(cif_files[0])
+        raise FileNotFoundError(f"No PDB/CIF files in {extract_dir}")
+
+    parser = PDBParser(QUIET=True)
+    frames = []
+    for pdb_file in pdb_files:
+        try:
+            structure = parser.get_structure("prot", str(pdb_file))
+            for model in structure.get_models():
+                chain = list(model.get_chains())[0]
+                ca = []
+                for residue in chain.get_residues():
+                    if residue.id[0] != " ":
+                        continue
+                    if "CA" in residue:
+                        ca.append(residue["CA"].get_vector().get_array())
+                if ca:
+                    frames.append(ca)
+        except Exception:
+            continue
+
+    if not frames:
+        raise RuntimeError(f"No valid Cα coordinates extracted from {extract_dir}")
+
+    # Ensure consistent length
+    min_len = min(len(f) for f in frames)
+    return np.array([f[:min_len] for f in frames], dtype=np.float32)
 
 
 def load_ped_or_fallback(
