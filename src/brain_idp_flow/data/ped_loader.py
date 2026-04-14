@@ -97,21 +97,78 @@ def load_ped_or_fallback(
     ped_id: str,
     sequence_length: int,
     cache_dir: str | Path = "data/ped",
-    n_fallback: int = 50,
+    n_fallback: int = 500,
 ) -> np.ndarray:
-    """Try loading PED ensemble; if unavailable, generate random coil fallback."""
+    """Try loading PED ensemble; if unavailable, generate random coil fallback.
+
+    The fallback generates diverse random coil conformations with realistic
+    bond lengths (3.8 Å Cα-Cα) and a persistence length of ~5 residues.
+    """
     try:
-        return load_ped_ensemble(ped_id, cache_dir)
+        ensemble = load_ped_ensemble(ped_id, cache_dir)
+        # If PED has very few frames, augment with random perturbations
+        if len(ensemble) < 100:
+            ensemble = _augment_ensemble(ensemble, target_n=max(500, len(ensemble)))
+        return ensemble
     except Exception:
-        # Random coil fallback: chain of 3.8Å Cα-Cα bonds with random angles
-        rng = np.random.default_rng(42)
-        frames = []
-        for _ in range(n_fallback):
-            coords = np.zeros((sequence_length, 3), dtype=np.float32)
-            for i in range(1, sequence_length):
-                direction = rng.standard_normal(3).astype(np.float32)
-                direction /= np.linalg.norm(direction) + 1e-8
-                coords[i] = coords[i - 1] + 3.8 * direction
-            coords -= coords.mean(axis=0)
-            frames.append(coords)
-        return np.stack(frames)
+        return _generate_random_coil_ensemble(sequence_length, n_fallback)
+
+
+def _augment_ensemble(
+    ensemble: np.ndarray,
+    target_n: int = 500,
+) -> np.ndarray:
+    """Augment a small PED ensemble with Gaussian perturbations."""
+    n_existing = len(ensemble)
+    if n_existing >= target_n:
+        return ensemble
+
+    rng = np.random.default_rng(42)
+    augmented = [ensemble]
+
+    while sum(len(a) for a in augmented) < target_n:
+        # Small random perturbation of existing frames
+        idx = rng.choice(n_existing, size=min(n_existing, target_n - sum(len(a) for a in augmented)))
+        noise_scale = 0.5  # Angstroms — small perturbation
+        perturbed = ensemble[idx] + rng.normal(0, noise_scale, ensemble[idx].shape).astype(np.float32)
+        # Re-center
+        perturbed -= perturbed.mean(axis=1, keepdims=True)
+        augmented.append(perturbed)
+
+    return np.concatenate(augmented, axis=0)[:target_n]
+
+
+def _generate_random_coil_ensemble(
+    sequence_length: int,
+    n_frames: int = 500,
+) -> np.ndarray:
+    """Generate random coil ensemble with persistence length.
+
+    Uses a worm-like chain model with persistence length ~5 residues
+    for more realistic IDP conformations than pure random walk.
+    """
+    rng = np.random.default_rng(42)
+    bond_length = 3.8  # Cα-Cα distance in Angstroms
+    persistence_length = 5.0  # in residue units
+    # Correlation factor between consecutive bond vectors
+    kappa = np.exp(-1.0 / persistence_length)
+
+    frames = []
+    for _ in range(n_frames):
+        coords = np.zeros((sequence_length, 3), dtype=np.float32)
+        # Initial direction
+        direction = rng.standard_normal(3).astype(np.float32)
+        direction /= np.linalg.norm(direction) + 1e-8
+
+        for i in range(1, sequence_length):
+            # Correlated random walk (worm-like chain)
+            noise = rng.standard_normal(3).astype(np.float32)
+            noise /= np.linalg.norm(noise) + 1e-8
+            direction = kappa * direction + (1 - kappa) * noise
+            direction /= np.linalg.norm(direction) + 1e-8
+            coords[i] = coords[i - 1] + bond_length * direction
+
+        coords -= coords.mean(axis=0)
+        frames.append(coords)
+
+    return np.stack(frames)

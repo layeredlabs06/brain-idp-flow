@@ -187,16 +187,22 @@ def contact_formation_order(
     coords: Tensor,
     times: Tensor,
     threshold: float = 8.0,
+    persistence: int = 3,
 ) -> Tensor:
-    """For contacts present at t=1: find the earliest t they first appeared.
+    """For contacts present at t=1: find when they became stably formed.
+
+    A contact is "stably formed" at step s if it is present at steps
+    s, s+1, ..., s+persistence-1 (i.e., persists for `persistence` consecutive steps).
+    This avoids counting transient random contacts from early noise.
 
     Args:
         coords: (n_steps, B, L, 3)
         times: (n_steps,)
         threshold: contact distance in Angstroms
+        persistence: minimum consecutive steps to count as stable
 
     Returns:
-        (B, L, L) formation time (NaN for contacts not present at t=1)
+        (B, L, L) stable formation time (NaN for contacts not present at t=1)
     """
     n_steps, B, L, _ = coords.shape
 
@@ -204,19 +210,26 @@ def contact_formation_order(
     final_dists = torch.cdist(coords[-1], coords[-1])
     final_contacts = final_dists < threshold
 
-    # Track earliest formation time
+    # Pre-compute all contact maps
+    all_contacts = []
+    for step in range(n_steps):
+        dists = torch.cdist(coords[step], coords[step])
+        all_contacts.append(dists < threshold)
+
+    # Track stable formation time
     formation_time = torch.full(
         (B, L, L), float("nan"), device=coords.device
     )
 
-    for step in range(n_steps):
-        dists = torch.cdist(coords[step], coords[step])
-        in_contact = dists < threshold
+    for step in range(n_steps - persistence + 1):
+        # Check if contact is present for `persistence` consecutive steps
+        persistent = all_contacts[step]
+        for k in range(1, persistence):
+            persistent = persistent & all_contacts[step + k]
 
-        # Update formation time only for final contacts not yet assigned
-        is_final = final_contacts
+        # Update: only for final contacts not yet assigned
         not_assigned = formation_time.isnan()
-        update = is_final & not_assigned & in_contact
+        update = final_contacts & not_assigned & persistent
         formation_time[update] = times[step].item()
 
     return formation_time
@@ -256,22 +269,32 @@ def contact_kinetics_features(
     else:
         switch_lr = 0.0
 
-    # Formation order
+    # Formation order (stable contacts, persistence=3)
     form_order = contact_formation_order(coords, times, threshold)  # (B, L, L)
     site_form = form_order[:, pos, :]
     valid = ~site_form.isnan()
     if valid.any():
         contact_order_site = site_form[valid].mean().item()
     else:
-        contact_order_site = 1.0
+        contact_order_site = 0.5  # neutral default
 
-    # Early contact fraction: contacts at site formed before t=0.5
+    # Early contact fraction: stable contacts at site formed before t=0.5
     early_mask = site_form < 0.5
     early_and_valid = early_mask & valid
     if valid.any():
         early_frac = early_and_valid.float().sum().item() / valid.float().sum().item()
     else:
-        early_frac = 0.0
+        early_frac = 0.5  # neutral default
+
+    # Contact formation delay vs global: how late does this site form contacts
+    # compared to all other residue pairs?
+    all_valid = ~form_order.isnan()
+    if all_valid.any() and valid.any():
+        global_mean_formation = form_order[all_valid].mean().item()
+        site_mean_formation = site_form[valid].mean().item()
+        formation_delay = site_mean_formation - global_mean_formation
+    else:
+        formation_delay = 0.0
 
     return {
         "switching_rate_site": switch_site,
@@ -279,6 +302,7 @@ def contact_kinetics_features(
         "switching_rate_long_range": switch_lr,
         "contact_order_site": contact_order_site,
         "early_contact_fraction_site": early_frac,
+        "contact_formation_delay": formation_delay,
     }
 
 

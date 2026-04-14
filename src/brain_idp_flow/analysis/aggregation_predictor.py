@@ -61,6 +61,7 @@ def run_correlation_analysis(
         "switching_rate_long_range": "LR Contact Switching",
         "contact_order_site": "Contact Formation Order",
         "early_contact_fraction_site": "Early Contact Fraction",
+        "contact_formation_delay": "Contact Formation Delay",
     }
 
     # Compute correlations
@@ -355,3 +356,256 @@ def leave_one_protein_out_cv(
         "mean_rho": mean_rho,
         "n_folds": len(all_rhos),
     }
+
+
+def per_protein_correlation(
+    data: list[dict],
+    feature_names: dict | None = None,
+    output_dir: str | None = None,
+) -> dict:
+    """Within-protein correlation analysis — removes cross-protein confounding.
+
+    Computes Spearman correlation separately for each protein, then reports
+    per-protein and Fisher-combined p-values.
+
+    Args:
+        data: list of mutation dicts with "target", "agg_rate", and feature keys
+        feature_names: feature -> label mapping (uses defaults if None)
+        output_dir: save figures here (optional)
+
+    Returns:
+        dict with per-protein correlations and combined results
+    """
+    if feature_names is None:
+        feature_names = _default_feature_names()
+
+    proteins = sorted(set(d["target"] for d in data))
+    results: dict = {"per_protein": {}, "combined": {}}
+
+    print(f"\n{'='*60}")
+    print(f"PER-PROTEIN WITHIN-PROTEIN ANALYSIS")
+    print(f"{'='*60}")
+
+    for feat, label in feature_names.items():
+        per_prot = {}
+        for prot in proteins:
+            prot_data = [d for d in data if d["target"] == prot]
+            vals = [d.get(feat) for d in prot_data]
+            agg = [d["agg_rate"] for d in prot_data]
+
+            if any(v is None for v in vals) or len(vals) < 4:
+                continue
+
+            vals_arr = np.array(vals)
+            # Skip if constant
+            if vals_arr.std() < 1e-10:
+                continue
+
+            rho, pval = spearmanr(vals_arr, np.log(np.array(agg) + 1e-8))
+            per_prot[prot] = {"rho": float(rho), "p": float(pval), "n": len(vals)}
+
+        if not per_prot:
+            continue
+
+        # Fisher's method to combine p-values
+        p_vals = [v["p"] for v in per_prot.values() if not np.isnan(v["p"])]
+        rhos = [v["rho"] for v in per_prot.values() if not np.isnan(v["rho"])]
+
+        if p_vals:
+            from scipy.stats import combine_pvalues
+            _, fisher_p = combine_pvalues(p_vals, method="fisher")
+            mean_rho = float(np.mean(rhos))
+        else:
+            fisher_p = 1.0
+            mean_rho = 0.0
+
+        results["combined"][feat] = {
+            "label": label,
+            "mean_rho": mean_rho,
+            "fisher_p": float(fisher_p),
+            "per_protein": per_prot,
+        }
+
+    # Print results
+    print(f"\n{'Feature':<30} {'Mean ρ':>8} {'Fisher p':>10} ", end="")
+    for prot in proteins:
+        print(f"  {prot[:8]:>8}", end="")
+    print()
+    print("-" * (55 + 10 * len(proteins)))
+
+    for feat, info in sorted(
+        results["combined"].items(),
+        key=lambda x: abs(x[1]["mean_rho"]),
+        reverse=True,
+    ):
+        sig = "**" if info["fisher_p"] < 0.01 else "*" if info["fisher_p"] < 0.05 else ""
+        print(f"{info['label']:<30} {info['mean_rho']:>8.3f} {info['fisher_p']:>10.4f}{sig:>3}", end="")
+        for prot in proteins:
+            pp = info["per_protein"].get(prot)
+            if pp:
+                print(f"  {pp['rho']:>8.3f}", end="")
+            else:
+                print(f"  {'n/a':>8}", end="")
+        print()
+
+    # Plot per-protein correlations for top features
+    if output_dir:
+        _plot_per_protein_detailed(data, results, proteins, feature_names, output_dir)
+
+    return results
+
+
+def zscore_normalized_correlation(
+    data: list[dict],
+    feature_names: dict | None = None,
+) -> dict:
+    """Z-score normalize features within each protein, then run cross-protein correlation.
+
+    This removes protein-level mean/scale differences (e.g., Aβ42 having
+    higher contact frequency simply because it's shorter).
+
+    Args:
+        data: list of mutation dicts
+        feature_names: feature -> label mapping
+
+    Returns:
+        dict with correlations on z-scored features
+    """
+    if feature_names is None:
+        feature_names = _default_feature_names()
+
+    proteins = sorted(set(d["target"] for d in data))
+
+    # Z-score each feature within each protein
+    normalized = [dict(d) for d in data]  # shallow copy
+
+    for feat in feature_names:
+        for prot in proteins:
+            indices = [i for i, d in enumerate(data) if d["target"] == prot]
+            vals = [data[i].get(feat) for i in indices]
+            if any(v is None for v in vals):
+                continue
+            arr = np.array(vals, dtype=float)
+            std = arr.std()
+            if std < 1e-10:
+                for i in indices:
+                    normalized[i][feat] = 0.0
+            else:
+                mean = arr.mean()
+                for i in indices:
+                    normalized[i][feat] = (normalized[i][feat] - mean) / std
+
+    # Run correlation on z-scored data
+    log_agg_raw = np.array([d["agg_rate"] for d in data])
+    # Also z-score agg_rate per protein
+    log_agg = np.log(log_agg_raw + 1e-8)
+    for prot in proteins:
+        indices = [i for i, d in enumerate(data) if d["target"] == prot]
+        prot_agg = log_agg[indices]
+        std = prot_agg.std()
+        if std > 1e-10:
+            mean = prot_agg.mean()
+            for i in indices:
+                log_agg[i] = (log_agg[i] - mean) / std
+
+    print(f"\n{'='*60}")
+    print(f"Z-SCORE NORMALIZED CORRELATION (n={len(data)})")
+    print(f"{'='*60}")
+    print(f"{'Feature':<35} {'ρ':>8} {'p-value':>10} {'Sig?':>6}")
+    print("-" * 65)
+
+    correlations = {}
+    for feat, label in feature_names.items():
+        vals = [d.get(feat) for d in normalized]
+        if any(v is None for v in vals):
+            continue
+        arr = np.array(vals)
+        if arr.std() < 1e-10:
+            continue
+        rho, pval = spearmanr(arr, log_agg)
+        correlations[feat] = {
+            "label": label,
+            "spearman_rho": float(rho),
+            "p_value": float(pval),
+        }
+        sig = "***" if pval < 0.001 else "**" if pval < 0.01 else "*" if pval < 0.05 else ""
+        print(f"{label:<35} {rho:>8.3f} {pval:>10.4f} {sig:>6}")
+
+    return correlations
+
+
+def _default_feature_names() -> dict:
+    return {
+        "llr_site": "ESM-2 LLR",
+        "delta_ppl": "ESM-2 ΔPPL",
+        "site_rmsf": "PED RMSF",
+        "site_contact_freq": "PED Contact Freq",
+        "site_long_range_cf": "PED Long-Range CF",
+        "local_rg": "PED Local Rg",
+        "late_velocity_site": "Late-Stage Velocity",
+        "late_velocity_global": "Late-Stage Velocity (global)",
+        "convergence_time_site": "Convergence Time",
+        "velocity_variance_late": "Velocity Variance (late)",
+        "switching_rate_site": "Contact Switching Rate",
+        "switching_rate_long_range": "LR Contact Switching",
+        "contact_order_site": "Contact Formation Order",
+        "early_contact_fraction_site": "Early Contact Fraction",
+        "contact_formation_delay": "Contact Formation Delay",
+    }
+
+
+def _plot_per_protein_detailed(
+    data: list[dict],
+    results: dict,
+    proteins: list[str],
+    feature_names: dict,
+    output_dir: str,
+) -> None:
+    """Plot top features per-protein scatter."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Top 4 features by |mean_rho|
+    top = sorted(
+        results["combined"].items(),
+        key=lambda x: abs(x[1]["mean_rho"]),
+        reverse=True,
+    )[:4]
+
+    protein_colors = {"tau_K18": "#1f77b4", "asyn": "#ff7f0e", "abeta42": "#2ca02c"}
+
+    fig, axes = plt.subplots(len(top), len(proteins), figsize=(5 * len(proteins), 4 * len(top)))
+    if len(top) == 1:
+        axes = [axes]
+
+    for row, (feat, info) in enumerate(top):
+        for col, prot in enumerate(proteins):
+            ax = axes[row][col] if len(proteins) > 1 else axes[row]
+            prot_data = [d for d in data if d["target"] == prot]
+            vals = [d.get(feat, 0) for d in prot_data]
+            agg = [d["agg_rate"] for d in prot_data]
+            labels = [d["mutation"] for d in prot_data]
+
+            color = protein_colors.get(prot, "gray")
+            ax.scatter(vals, agg, s=70, c=color, edgecolors="black", linewidth=0.5)
+            for i, lbl in enumerate(labels):
+                ax.annotate(lbl, (vals[i], agg[i]), fontsize=7,
+                            textcoords="offset points", xytext=(4, 4))
+
+            pp = info["per_protein"].get(prot)
+            if pp:
+                ax.set_title(f"{prot}\nρ={pp['rho']:.3f}, p={pp['p']:.3f} (n={pp['n']})",
+                             fontsize=10)
+            else:
+                ax.set_title(f"{prot} (n/a)", fontsize=10)
+
+            if col == 0:
+                ax.set_ylabel(info["label"], fontsize=10)
+            ax.set_xlabel("Feature Value" if row == len(top) - 1 else "")
+
+    fig.suptitle("Per-Protein Within-Protein Correlations", fontsize=13, y=1.01)
+    fig.tight_layout()
+    save_path = output_dir / "per_protein_detailed.png"
+    fig.savefig(str(save_path), dpi=150, bbox_inches="tight")
+    print(f"Saved: {save_path}")
+    plt.close(fig)
