@@ -18,6 +18,7 @@ from scipy.stats import spearmanr
 
 FEATURE_KEYS = [
     "llr_site",
+    "delta_rg",
     "site_rmsf",
     "site_contact_freq",
     "site_long_range_cf",
@@ -419,6 +420,189 @@ def _plot_ml_comparison(results: dict, output_dir: Path) -> None:
 
     fig.tight_layout()
     save_path = output_dir / "ml_comparison.png"
+    fig.savefig(str(save_path), dpi=150)
+    print(f"Saved: {save_path}")
+    plt.close(fig)
+
+
+def run_lean_composite(
+    data: list[dict],
+    output_dir: str | None = None,
+) -> dict:
+    """Focused ΔRg + ESM-2 LLR composite analysis.
+
+    Tests individual features, their combination, and progressive
+    feature addition to find the optimal lean model.
+
+    Args:
+        data: list of mutation dicts with delta_rg, llr_site, agg_rate/nucleation_score
+        output_dir: save figures here
+
+    Returns:
+        dict with all comparison results
+    """
+    from sklearn.linear_model import LinearRegression, LassoCV
+    from sklearn.ensemble import GradientBoostingRegressor
+    from sklearn.model_selection import KFold
+    from sklearn.preprocessing import StandardScaler
+
+    # Target: use nucleation_score if available, else log(agg_rate)
+    if "nucleation_score" in data[0]:
+        y = np.array([d["nucleation_score"] for d in data], dtype=float)
+        target_name = "Nucleation Score"
+    else:
+        y = np.log(np.array([d["agg_rate"] for d in data], dtype=float) + 1e-8)
+        target_name = "log(Aggregation Rate)"
+
+    n = len(data)
+
+    print(f"\n{'='*60}")
+    print(f"LEAN COMPOSITE: ΔRg + ESM-2 LLR (n={n})")
+    print(f"{'='*60}")
+
+    # Feature sets to compare
+    feature_sets = {
+        "LLR only": ["llr_site"],
+        "ΔRg only": ["delta_rg"],
+        "LLR + ΔRg": ["llr_site", "delta_rg"],
+        "LLR + ΔRg + switching": ["llr_site", "delta_rg", "switching_rate_site", "switching_rate_long_range"],
+        "All available": None,  # uses all non-None features
+    }
+
+    results = {}
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+    for name, feat_keys in feature_sets.items():
+        if feat_keys is None:
+            # All available
+            feat_keys = [k for k in FEATURE_KEYS if all(d.get(k) is not None for d in data)]
+            feat_keys = [k for k in feat_keys if np.array([d[k] for d in data]).std() > 1e-10]
+
+        # Check availability
+        available = [k for k in feat_keys if all(d.get(k) is not None for d in data)]
+        if not available:
+            continue
+
+        X = np.column_stack([np.array([d[k] for d in data], dtype=float) for k in available])
+
+        # Spearman for individual (if single feature)
+        if len(available) == 1:
+            rho_raw, p_raw = spearmanr(X[:, 0], y)
+        else:
+            rho_raw, p_raw = None, None
+
+        # 5-fold CV with linear regression
+        scaler = StandardScaler()
+        cv_rhos_lr = []
+        cv_rhos_gb = []
+
+        for train_idx, test_idx in kf.split(X):
+            X_tr = scaler.fit_transform(X[train_idx])
+            X_te = scaler.transform(X[test_idx])
+
+            # Linear regression
+            lr = LinearRegression()
+            lr.fit(X_tr, y[train_idx])
+            pred_lr = lr.predict(X_te)
+            r, _ = spearmanr(pred_lr, y[test_idx])
+            if not np.isnan(r):
+                cv_rhos_lr.append(r)
+
+            # Gradient boosting (mild)
+            gb = GradientBoostingRegressor(
+                n_estimators=50, max_depth=2, learning_rate=0.1,
+                min_samples_leaf=10, random_state=42,
+            )
+            gb.fit(X_tr, y[train_idx])
+            pred_gb = gb.predict(X_te)
+            r, _ = spearmanr(pred_gb, y[test_idx])
+            if not np.isnan(r):
+                cv_rhos_gb.append(r)
+
+        mean_lr = float(np.mean(cv_rhos_lr)) if cv_rhos_lr else 0.0
+        mean_gb = float(np.mean(cv_rhos_gb)) if cv_rhos_gb else 0.0
+
+        results[name] = {
+            "features": available,
+            "n_features": len(available),
+            "spearman_raw": float(rho_raw) if rho_raw is not None else None,
+            "p_raw": float(p_raw) if p_raw is not None else None,
+            "cv_rho_linear": mean_lr,
+            "cv_rho_gb": mean_gb,
+        }
+
+        raw_str = f"raw ρ={rho_raw:.3f}" if rho_raw is not None else ""
+        print(f"  {name:<30} p={len(available)}  LR CV ρ={mean_lr:.3f}  "
+              f"GB CV ρ={mean_gb:.3f}  {raw_str}")
+
+    # Best model
+    best = max(results.items(), key=lambda x: x[1]["cv_rho_gb"])
+    print(f"\n  Best: {best[0]} (GB CV ρ={best[1]['cv_rho_gb']:.3f})")
+
+    # Plot comparison
+    if output_dir:
+        _plot_lean_composite(results, y, data, target_name, Path(output_dir))
+
+    return results
+
+
+def _plot_lean_composite(
+    results: dict,
+    y: np.ndarray,
+    data: list[dict],
+    target_name: str,
+    output_dir: Path,
+) -> None:
+    """Plot lean composite comparison."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+    # Plot 1: CV ρ comparison across feature sets
+    ax = axes[0]
+    names = list(results.keys())
+    lr_rhos = [results[n]["cv_rho_linear"] for n in names]
+    gb_rhos = [results[n]["cv_rho_gb"] for n in names]
+
+    x_pos = np.arange(len(names))
+    ax.bar(x_pos - 0.2, lr_rhos, 0.35, label="Linear", color="#4575b4", alpha=0.8)
+    ax.bar(x_pos + 0.2, gb_rhos, 0.35, label="GBoosting", color="#d73027", alpha=0.8)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels([n.replace(" + ", "\n+ ") for n in names], fontsize=8)
+    ax.set_ylabel("CV Spearman ρ")
+    ax.set_title("Feature Set Comparison")
+    ax.legend()
+    ax.axhline(0, color="gray", linestyle="--", alpha=0.3)
+
+    # Plot 2: LLR vs nucleation score
+    ax = axes[1]
+    llr_vals = np.array([d.get("llr_site", 0) for d in data])
+    is_fad = np.array([d.get("is_fad", False) for d in data])
+    ax.scatter(llr_vals[~is_fad], y[~is_fad], s=10, alpha=0.4, c="steelblue", label="non-fAD")
+    if is_fad.any():
+        ax.scatter(llr_vals[is_fad], y[is_fad], s=60, facecolors="none",
+                   edgecolors="red", linewidth=2, label="fAD")
+    rho, pval = spearmanr(llr_vals, y)
+    ax.set_xlabel("ESM-2 LLR")
+    ax.set_ylabel(target_name)
+    ax.set_title(f"ESM-2 LLR vs {target_name}\nρ={rho:.3f}, p={pval:.2e}")
+    ax.legend(fontsize=9)
+
+    # Plot 3: ΔRg vs nucleation score
+    ax = axes[2]
+    drg_vals = np.array([d.get("delta_rg", 0) for d in data])
+    ax.scatter(drg_vals[~is_fad], y[~is_fad], s=10, alpha=0.4, c="coral", label="non-fAD")
+    if is_fad.any():
+        ax.scatter(drg_vals[is_fad], y[is_fad], s=60, facecolors="none",
+                   edgecolors="red", linewidth=2, label="fAD")
+    rho, pval = spearmanr(drg_vals, y)
+    ax.set_xlabel("ΔRg (Flow Model)")
+    ax.set_ylabel(target_name)
+    ax.set_title(f"ΔRg vs {target_name}\nρ={rho:.3f}, p={pval:.2e}")
+    ax.legend(fontsize=9)
+
+    fig.tight_layout()
+    save_path = output_dir / "lean_composite.png"
     fig.savefig(str(save_path), dpi=150)
     print(f"Saved: {save_path}")
     plt.close(fig)
