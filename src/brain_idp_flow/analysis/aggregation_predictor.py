@@ -40,14 +40,27 @@ def run_correlation_analysis(
 
     # Features to test
     feature_names = {
+        # ESM-2 features
         "llr_site": "ESM-2 LLR (site)",
         "delta_ppl": "ESM-2 ΔPPL",
+        # PED structural features
         "site_rmsf": "PED RMSF",
         "site_contact_freq": "PED Contact Freq",
         "site_long_range_cf": "PED Long-Range CF",
         "local_rg": "PED Local Rg",
         "beta_propensity": "PED β-propensity",
         "exposure_proxy": "PED Exposure",
+        # Trajectory velocity features (Direction A)
+        "late_velocity_site": "Late-Stage Velocity",
+        "late_velocity_global": "Late-Stage Velocity (global)",
+        "convergence_time_site": "Convergence Time",
+        "convergence_delay_vs_neighbors": "Convergence Delay",
+        "velocity_variance_late": "Velocity Variance (late)",
+        # Trajectory contact features (Direction B)
+        "switching_rate_site": "Contact Switching Rate",
+        "switching_rate_long_range": "LR Contact Switching",
+        "contact_order_site": "Contact Formation Order",
+        "early_contact_fraction_site": "Early Contact Fraction",
     }
 
     # Compute correlations
@@ -250,4 +263,95 @@ def _compute_composite(
         "features_used": [f[0] for f in top],
         "spearman_rho": float(rho),
         "p_value": float(pval),
+    }
+
+
+def leave_one_protein_out_cv(
+    data: list[dict],
+    feature_names: dict | None = None,
+) -> dict:
+    """Leave-one-protein-out cross-validation for aggregation prediction.
+
+    Fits rank-based composite on 2 proteins, evaluates on the held-out protein.
+    No model retraining — only the correlation/composite scoring is CV'd.
+
+    Args:
+        data: list of mutation dicts (must include "target" and "agg_rate" keys)
+        feature_names: feature name -> label mapping (uses default if None)
+
+    Returns:
+        dict with per-protein and mean results
+    """
+    if feature_names is None:
+        feature_names = {
+            "llr_site": "ESM-2 LLR",
+            "late_velocity_site": "Late-Stage Velocity",
+            "switching_rate_site": "Contact Switching Rate",
+        }
+
+    proteins = sorted(set(d["target"] for d in data))
+    results = {}
+
+    print(f"\n{'='*60}")
+    print(f"LEAVE-ONE-PROTEIN-OUT CV ({len(proteins)} folds)")
+    print(f"{'='*60}")
+
+    all_rhos = []
+
+    for held_out in proteins:
+        train_data = [d for d in data if d["target"] != held_out]
+        test_data = [d for d in data if d["target"] == held_out]
+
+        if len(test_data) < 3:
+            print(f"  {held_out}: skipped (n={len(test_data)} < 3)")
+            continue
+
+        train_agg = np.log(np.array([d["agg_rate"] for d in train_data]) + 1e-8)
+        test_agg = np.log(np.array([d["agg_rate"] for d in test_data]) + 1e-8)
+
+        # Find best features on training set
+        train_corrs = {}
+        for feat, label in feature_names.items():
+            train_vals = [d.get(feat) for d in train_data]
+            if any(v is None for v in train_vals):
+                continue
+            rho, _ = spearmanr(train_vals, train_agg)
+            train_corrs[feat] = rho
+
+        if not train_corrs:
+            continue
+
+        # Top 3 features from training
+        top_feats = sorted(train_corrs.items(), key=lambda x: abs(x[1]), reverse=True)[:3]
+
+        # Composite score on test set using training-derived ranks/directions
+        n_test = len(test_data)
+        composite = np.zeros(n_test)
+
+        for feat, train_rho in top_feats:
+            test_vals = np.array([d.get(feat, 0) for d in test_data])
+            ranks = np.argsort(np.argsort(test_vals)).astype(float)
+            if train_rho < 0:
+                ranks = n_test - 1 - ranks
+            composite += ranks
+
+        rho_test, pval_test = spearmanr(composite, test_agg)
+        all_rhos.append(rho_test)
+
+        results[held_out] = {
+            "n_test": n_test,
+            "spearman_rho": float(rho_test),
+            "p_value": float(pval_test),
+            "features_used": [f[0] for f in top_feats],
+        }
+
+        print(f"  {held_out} (n={n_test}): ρ={rho_test:.3f}, p={pval_test:.3f}")
+
+    mean_rho = float(np.mean(all_rhos)) if all_rhos else 0.0
+    print(f"\n  Mean ρ across folds: {mean_rho:.3f}")
+
+    return {
+        "per_protein": results,
+        "mean_rho": mean_rho,
+        "n_folds": len(all_rhos),
     }

@@ -43,6 +43,7 @@ class ESM2MutationScorer:
         pos: int,
         wt_aa: str,
         mt_aa: str,
+        fast: bool = False,
     ) -> dict:
         """Score a single mutation.
 
@@ -51,9 +52,10 @@ class ESM2MutationScorer:
             pos: 1-indexed mutation position
             wt_aa: wild-type amino acid (single letter)
             mt_aa: mutant amino acid (single letter)
+            fast: if True, skip pseudo-perplexity (much faster for scanning)
 
         Returns:
-            dict with llr_site, log_p_wt, log_p_mt, delta_ppl
+            dict with llr_site, log_p_wt, log_p_mt, and optionally delta_ppl
         """
         self._load()
 
@@ -82,21 +84,24 @@ class ESM2MutationScorer:
         log_p_mt = log_probs[mt_token].item()
         llr = log_p_mt - log_p_wt
 
-        # Full-sequence pseudo-perplexity (optional, more expensive)
-        # For speed, compute pseudo-log-likelihood for WT and mutant sequences
-        ppl_wt = self._pseudo_ppl(sequence)
-        mut_seq = list(sequence)
-        mut_seq[idx_0] = mt_aa
-        ppl_mt = self._pseudo_ppl("".join(mut_seq))
-
-        return {
+        result = {
             "llr_site": llr,
             "log_p_wt": log_p_wt,
             "log_p_mt": log_p_mt,
-            "ppl_wt": ppl_wt,
-            "ppl_mt": ppl_mt,
-            "delta_ppl": ppl_mt - ppl_wt,
         }
+
+        if not fast:
+            ppl_wt = self._pseudo_ppl(sequence)
+            mut_seq = list(sequence)
+            mut_seq[idx_0] = mt_aa
+            ppl_mt = self._pseudo_ppl("".join(mut_seq))
+            result.update({
+                "ppl_wt": ppl_wt,
+                "ppl_mt": ppl_mt,
+                "delta_ppl": ppl_mt - ppl_wt,
+            })
+
+        return result
 
     @torch.no_grad()
     def _pseudo_ppl(self, sequence: str) -> float:

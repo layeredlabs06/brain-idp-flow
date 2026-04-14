@@ -79,12 +79,17 @@ class StructureTransformerLayer(nn.Module):
         self.film2 = FiLMLayer(d_model, d_model)
 
     def forward(
-        self, x: Tensor, pair_rbf: Tensor, t_emb: Tensor
-    ) -> Tensor:
+        self, x: Tensor, pair_rbf: Tensor, t_emb: Tensor,
+        return_attention: bool = False,
+    ) -> Tensor | tuple[Tensor, Tensor]:
         """
         x: (B, L, D)
         pair_rbf: (B, L, L, n_rbf)
         t_emb: (B, D)
+        return_attention: if True, also return attention weights
+
+        Returns:
+            x if return_attention is False, else (x, attn_weights)
         """
         # Pairwise attention bias: (B, n_heads, L, L)
         attn_bias = self.pair_proj(pair_rbf).permute(0, 3, 1, 2)
@@ -92,7 +97,11 @@ class StructureTransformerLayer(nn.Module):
         # Self-attention with pairwise bias
         h = self.norm1(x)
         h = self.film1(h, t_emb)
-        attn_out, _ = self.attn(h, h, h, attn_mask=None)
+        attn_out, attn_weights = self.attn(
+            h, h, h, attn_mask=None,
+            need_weights=return_attention,
+            average_attn_weights=False,
+        )
         # Add pairwise bias effect (approximate via additive before softmax not
         # directly supported by nn.MHA, so we add it post-attention as residual)
         x = x + attn_out
@@ -102,6 +111,8 @@ class StructureTransformerLayer(nn.Module):
         h = self.film2(h, t_emb)
         x = x + self.ff(h)
 
+        if return_attention:
+            return x, attn_weights
         return x
 
 
@@ -181,7 +192,14 @@ class MutationConditionedStructureHead(nn.Module):
         t: Tensor,
         mut_pos: Tensor,
         mut_aa: Tensor,
-    ) -> Tensor:
+        return_attention: bool = False,
+    ) -> Tensor | dict:
+        """Forward pass.
+
+        Returns:
+            v_hat (Tensor) if return_attention is False.
+            dict {"v_hat": Tensor, "attn_weights": list[Tensor]} if True.
+        """
         B, L, _ = x_t.shape
 
         # Center coordinates
@@ -208,8 +226,13 @@ class MutationConditionedStructureHead(nn.Module):
         pair_rbf = self.rbf(dists)  # (B, L, L, n_rbf)
 
         # Transformer layers
+        all_attn_weights: list[Tensor] = []
         for layer in self.layers:
-            h = layer(h, pair_rbf, t_emb)
+            if return_attention:
+                h, attn_w = layer(h, pair_rbf, t_emb, return_attention=True)
+                all_attn_weights.append(attn_w)
+            else:
+                h = layer(h, pair_rbf, t_emb)
 
         # Output velocity
         h = self.output_norm(h)
@@ -218,4 +241,6 @@ class MutationConditionedStructureHead(nn.Module):
         # Zero center the velocity (translation invariance)
         v_hat = v_hat - v_hat.mean(dim=1, keepdim=True)
 
+        if return_attention:
+            return {"v_hat": v_hat, "attn_weights": all_attn_weights}
         return v_hat

@@ -85,7 +85,8 @@ class ODESampler:
         mut_pos: Tensor,
         mut_aa: Tensor,
         n_samples: int = 1,
-    ) -> Tensor:
+        return_trajectory: bool = False,
+    ) -> Tensor | dict:
         """Generate structure samples via ODE integration.
 
         Args:
@@ -93,9 +94,15 @@ class ODESampler:
             mut_pos: (B,) mutation position
             mut_aa: (B,) mutant amino acid index
             n_samples: number of samples per input (if seq_emb is single)
+            return_trajectory: if True, return full trajectory with velocities
 
         Returns:
-            (B * n_samples, L, 3) generated Cα coordinates
+            If return_trajectory is False: (B * n_samples, L, 3) Cα coordinates
+            If return_trajectory is True: dict with keys:
+                "final": (B, L, 3) final coordinates
+                "coords": (n_steps, B, L, 3) coordinates at each step
+                "velocities": (n_steps, B, L, 3) velocity at each step
+                "times": (n_steps,) time values
         """
         if seq_emb.shape[0] == 1 and n_samples > 1:
             seq_emb = seq_emb.expand(n_samples, -1, -1)
@@ -111,21 +118,34 @@ class ODESampler:
 
         dt = 1.0 / self.n_steps
 
+        # Trajectory storage
+        if return_trajectory:
+            coords_traj: list[Tensor] = []
+            vel_traj: list[Tensor] = []
+            time_traj: list[float] = []
+
         for step in range(self.n_steps):
             t_val = step * dt
             t = torch.full((B,), t_val, device=device)
 
             if self.method == "euler":
                 v = self.model_fn(seq_emb, x, t, mut_pos, mut_aa)
+                if return_trajectory:
+                    coords_traj.append(x.clone())
+                    vel_traj.append(v.clone())
+                    time_traj.append(t_val)
                 x = x + v * dt
 
             elif self.method == "heun":
-                # Heun's method (2nd order)
                 v1 = self.model_fn(seq_emb, x, t, mut_pos, mut_aa)
                 x_pred = x + v1 * dt
 
                 t_next = torch.full((B,), min(t_val + dt, 1.0), device=device)
                 v2 = self.model_fn(seq_emb, x_pred, t_next, mut_pos, mut_aa)
+                if return_trajectory:
+                    coords_traj.append(x.clone())
+                    vel_traj.append(0.5 * (v1 + v2))
+                    time_traj.append(t_val)
                 x = x + 0.5 * (v1 + v2) * dt
 
             else:
@@ -134,4 +154,11 @@ class ODESampler:
             # Re-center at each step
             x = x - x.mean(dim=1, keepdim=True)
 
+        if return_trajectory:
+            return {
+                "final": x,
+                "coords": torch.stack(coords_traj),
+                "velocities": torch.stack(vel_traj),
+                "times": torch.tensor(time_traj),
+            }
         return x
