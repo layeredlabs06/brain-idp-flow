@@ -84,7 +84,7 @@ Here we present a conditional flow matching framework that generates mutation-sp
 
 \subsection*{Flow matching generates mutation-specific conformational ensembles}
 
-We trained a conditional flow matching model (MutationConditionedStructureHead) that takes ESM-2 sequence embeddings, noised C$\alpha$ coordinates, and mutation position/identity as input, and outputs a velocity field for ODE integration (Fig~\ref{fig:method}). Starting from Gaussian noise, 50-step Euler integration produces C$\alpha$ coordinate ensembles of 32--64 structures per mutation. The model was trained on conformational ensembles from the Protein Ensemble Database (PED) for three IDP targets: tau K18 (PED00017), $\alpha$-synuclein (PED00024), and A$\beta$42 (PED00531).
+We trained a conditional flow matching model (MutationConditionedStructureHead) that takes ESM-2 sequence embeddings, noised C$\alpha$ coordinates, and mutation position/identity as input, and outputs a velocity field for ODE integration. Starting from Gaussian noise, 50-step Euler integration produces C$\alpha$ coordinate ensembles of 32--64 structures per mutation. The model was trained on conformational ensembles from the Protein Ensemble Database (PED) for three IDP targets: tau K18 (PED00017), $\alpha$-synuclein (PED00024), and A$\beta$42 (PED00531).
 
 \subsection*{$\Delta R_g$ predicts amyloid nucleation scores}
 
@@ -92,7 +92,7 @@ We scored all 751 single-point substitutions from the Seuma et al. A$\beta$42 DM
 
 Among seven trajectory-derived features tested, $\Delta R_g$ was the strongest individual predictor and the most important feature in both Lasso regression (weight=0.298) and Random Forest (Gini importance=0.338) models. Other trajectory features showed no significant correlation after multiple comparison correction (Fig~\ref{fig:forest}).
 
-Importantly, $\Delta R_g$ and LLR capture partially independent information: their cross-correlation was $\rho$=0.369, indicating that $\sim$86\% of the variance in $\Delta R_g$ is not explained by LLR. A composite model combining all seven features achieved a cross-validated Spearman $\rho$ of 0.285 (Gradient Boosting, 5-fold CV).
+Importantly, $\Delta R_g$ and LLR capture partially independent information: their cross-correlation was $\rho$=0.369, indicating that approximately 86\% of the variance in $\Delta R_g$ is not explained by LLR. A composite model combining all seven features achieved a cross-validated Spearman $\rho$ of 0.285 (Gradient Boosting, 5-fold CV), confirming the additive value of structural features.
 
 \subsection*{ESM-2 scale determines correlation direction}
 
@@ -155,7 +155,7 @@ CANYA & Sequence & 0.115 & 1.6$\times$10$^{-3}$ \\
 
 \subsection*{PLM scale as a qualitative determinant}
 
-Our most unexpected finding is that the direction of the $\Delta R_g$--nucleation correlation reverses between ESM-2 150M (positive) and 650M (negative). This is qualitatively different from the quantitative scaling effects previously reported, where larger PLMs generally show improved but directionally consistent performance \cite{scaling2025}. Recent work has shown that only 39\% of protein fitness prediction tasks exhibit predictable scaling behavior. Our results extend this by demonstrating a case where scaling produces a \textit{sign change} in a downstream structural prediction.
+Our most unexpected finding is that the direction of the $\Delta R_g$--nucleation correlation reverses between ESM-2 150M (positive) and 650M (negative). This is qualitatively distinct from the quantitative scaling effects previously reported, where larger PLMs generally show improved but directionally consistent performance \cite{scaling2025}. Recent work has shown that only 39\% of protein fitness prediction tasks exhibit predictable scaling behavior \cite{medium_plm2025}. Our results extend this observation by demonstrating a case where scaling produces a \textit{sign change} in a downstream structural prediction, not merely a change in magnitude.
 
 The 650M direction (compact $\rightarrow$ aggregation) aligns with the established biophysical mechanism for A$\beta$42, where collapse of the hydrophobic core (residues 16--21, KLVFFA) into compact intermediates nucleates fibril formation.
 
@@ -203,34 +203,46 @@ All code is available at \url{https://github.com/layeredlabs06/brain-idp-flow}. 
 % ============================================================
 % Figure Legends
 % ============================================================
-\section*{Figure Legends}
+\section*{Figures}
 
-\begin{figure}[h]
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{a1.png}
 \caption{{\bf $\Delta R_g$ from flow-generated ensembles correlates with A$\beta$42 nucleation scores.} (a) ESM-2 35M model shows positive correlation ($\rho$=0.229). (b) ESM-2 650M model shows reversed negative correlation ($\rho$=$-$0.219). Red circles indicate familial Alzheimer's disease (fAD) mutations. $n$=751 single-point substitutions from Seuma et al.}
 \label{fig:scatter}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{44.png}
 \caption{{\bf Controlled experiment confirms PLM representation causes direction reversal.} Three flow models with identical architecture ($d$=256, $L$=6) but different ESM-2 inputs. Direction reversal occurs only with ESM-2 650M, ruling out architectural differences as the cause.}
 \label{fig:controlled}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{a3.png}
 \caption{{\bf Per-residue $\Delta R_g$ contributions reveal scale-dependent structural responses.} 35M model (left) shows non-local responses distant from the mutation site. 650M model (right) shows responses concentrated near the mutation site. Dashed lines indicate mutation positions. Shown for three fAD mutations: D7N, D7H, E11K.}
 \label{fig:perresidue}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{a4.png}
 \caption{{\bf Multi-amyloid validation.} (a) A$\beta$42 (in-distribution, $\rho$=0.229, $n$=751). (b) IAPP (out-of-distribution, $\rho$=0.110, $n$=661). IAPP was not in the training data, demonstrating generalization.}
 \label{fig:multiamyloid}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.6\textwidth]{a5.png}
 \caption{{\bf Forest plot of feature correlations with nucleation score.} Bootstrap 95\% confidence intervals from 10,000 resamples. Filled circles: BH-corrected $p<0.05$. Crosses: not significant. Blue: A$\beta$42, Green: IAPP, Gray: trajectory features (NS).}
 \label{fig:forest}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.6\textwidth]{a6.png}
 \caption{{\bf Method comparison on A$\beta$42 DMS.} Spearman $|\rho|$ with nucleation score. Flow $\Delta R_g$ outperforms sequence-based CANYA and ESM-2 LLR as individual predictors.}
 \label{fig:comparison}
 \end{figure}

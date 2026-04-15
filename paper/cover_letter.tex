@@ -1,0 +1,46 @@
+\documentclass[11pt]{letter}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+
+\signature{Taesung Park}
+\address{Independent Researcher \\ dlfmadldlfmaek@naver.com}
+
+\begin{document}
+
+\begin{letter}{Editorial Board \\ PLOS Computational Biology}
+
+\opening{Dear Editors,}
+
+We are pleased to submit our manuscript entitled ``\textbf{Protein Language Model Scale Determines the Direction of Structure-Aggregation Coupling in Intrinsically Disordered Proteins}'' for consideration as a Research Article in \textit{PLOS Computational Biology}.
+
+\textbf{Summary.} We present a conditional flow matching framework that generates mutation-specific conformational ensembles for intrinsically disordered proteins (IDPs) and predicts their aggregation propensity. Using deep mutational scanning data for two amyloid peptides---amyloid-$\beta$ 42 ($n$=751) and IAPP ($n$=661)---we demonstrate that the change in radius of gyration ($\Delta R_g$) from flow-generated ensembles significantly predicts experimental nucleation scores, outperforming the recently published CANYA predictor (Science Advances, 2025).
+
+\textbf{Key finding.} We discover an unexpected qualitative phase transition in protein language model (PLM) representations: the direction of the structure--aggregation correlation reverses between ESM-2 150M and 650M, even when the downstream model architecture is held constant. This sign change---not merely a change in magnitude---has not been previously reported in the PLM scaling literature and reveals that larger language models encode fundamentally different structural information about IDP conformational dynamics.
+
+\textbf{Significance.} This work is relevant to the readership of \textit{PLOS Computational Biology} because it:
+
+\begin{itemize}
+    \item Establishes flow matching as a lightweight, MD-free alternative for mutation-specific IDP ensemble generation
+    \item Provides the first multi-amyloid validation (A$\beta$42 + IAPP) of a generative structure model for aggregation prediction, including out-of-distribution generalization
+    \item Reveals scale-dependent behavior in protein language models with implications beyond IDP research for the broader PLM community
+    \item Reports all results with bootstrap confidence intervals and multiple comparison correction, with full code and data publicly available
+\end{itemize}
+
+All code is available at \url{https://github.com/layeredlabs06/brain-idp-flow}, and a Google Colab notebook reproduces all results.
+
+This manuscript has not been published elsewhere and is not under consideration at another journal. We have no conflicts of interest to declare.
+
+We suggest the following potential reviewers with relevant expertise:
+
+\begin{enumerate}
+    \item \textbf{Benedetta Bolognesi} (Institute for Bioengineering of Catalonia) --- Expert in amyloid DMS, senior author of both DMS datasets used in this study
+    \item \textbf{Bowen Jing} (MIT) --- Developer of AlphaFlow, expert in flow matching for protein ensembles
+    \item \textbf{Alexander Rives} (EvolutionaryScale) --- Senior author of ESM-2, expert in protein language model scaling
+\end{enumerate}
+
+Thank you for considering our submission. We look forward to your response.
+
+\closing{Sincerely,}
+
+\end{letter}
+\end{document}
