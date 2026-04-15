@@ -1,0 +1,36 @@
+# Controlled experiment: same architecture as 35M, ESM-2 650M input only
+model:
+  d_model: 256           # SAME as 35M
+  n_heads: 8             # SAME
+  n_layers: 6            # SAME
+  d_seq_in: 1280         # ESM-2 650M output dim (only difference)
+  dropout: 0.1
+  rbf_bins: 16
+  rbf_max: 20.0
+  mutation_embed_dim: 32
+
+training:
+  batch_size: 4          # smaller for VRAM (650M embeddings are larger)
+  grad_accum: 8          # effective batch = 32
+  lr: 1.0e-4             # SAME as 35M
+  weight_decay: 1.0e-2
+  max_steps: 50000
+  warmup_steps: 1000     # SAME
+  scheduler: cosine
+  amp: true
+  grad_clip: 1.0
+  ema_decay: 0.999
+  val_every: 500
+  ckpt_every: 2500
+  log_dir: "runs/flow_ctrl_650m"
+
+data:
+  max_len: 160
+  train_npz: "data/train.npz"
+  val_fraction: 0.1
+  augment_rotation: true
+
+sampling:
+  n_steps: 50
+  method: "euler"
+  n_samples: 200
