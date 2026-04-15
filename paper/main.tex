@@ -1,0 +1,238 @@
+% PLOS Computational Biology LaTeX Template
+\documentclass[10pt,letterpaper]{article}
+\usepackage[top=0.85in,left=2.75in,footskip=0.75in]{geometry}
+
+\usepackage{amsmath,amssymb}
+\usepackage{changepage}
+\usepackage{textcomp,marvosym}
+\usepackage{cite}
+\usepackage{nameref,hyperref}
+\usepackage[right]{lineno}
+\usepackage{microtype}
+\DisableLigatures[f]{encoding = *, family = * }
+\usepackage[table]{xcolor}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+
+\newcommand{\drg}{$\Delta R_g$}
+\newcommand{\abeta}{A$\beta$42}
+\newcommand{\rhosp}{$\rho$}
+
+\newenvironment{plosauthor}{}{}
+
+\raggedright
+\setlength{\parindent}{0.5cm}
+\textwidth 5.25in
+\textheight 8.75in
+
+% Headers
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\rfoot{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+\linenumbers
+
+\begin{document}
+\vspace*{0.2in}
+
+% Title
+\begin{flushleft}
+{\Large\textbf{Protein Language Model Scale Determines the Direction of Structure-Aggregation Coupling in Intrinsically Disordered Proteins}}
+\newline
+\\
+% Authors
+Taesung Park\textsuperscript{1,*}
+\\
+\bigskip
+\textbf{1} Independent Researcher
+\\
+\bigskip
+* dlfmadldlfmaek@naver.com
+
+\end{flushleft}
+
+% ============================================================
+% Abstract
+% ============================================================
+\section*{Abstract}
+
+Predicting how mutations affect the aggregation propensity of intrinsically disordered proteins (IDPs) is critical for understanding neurodegenerative diseases, yet existing methods rely primarily on sequence-based features. Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles from protein language model (PLM) embeddings, enabling structure-based aggregation prediction without molecular dynamics simulation. Evaluating on deep mutational scanning (DMS) data for amyloid-$\beta$ 42 (A$\beta$42, $n$=751) and islet amyloid polypeptide (IAPP, $n$=661), we show that the change in radius of gyration ($\Delta R_g$) from flow-generated ensembles correlates significantly with experimental nucleation scores (A$\beta$42: $\rho$=0.229, $p$=1.4$\times$10$^{-9}$; IAPP: $\rho$=0.110, $p$=1.3$\times$10$^{-3}$), outperforming the sequence-based CANYA predictor ($\rho$=0.115) while providing orthogonal information to ESM-2 log-likelihood ratios (LLR). Unexpectedly, we discover that the \textit{direction} of the $\Delta R_g$--nucleation correlation reverses depending on PLM scale: ESM-2 35M and 150M yield positive correlations, while ESM-2 650M yields a negative correlation, even when architecture is held constant. This qualitative phase transition in PLM representations has not been previously reported and suggests that larger PLMs encode fundamentally different structural information about IDP conformational dynamics.
+
+% ============================================================
+% Introduction
+% ============================================================
+\section*{Introduction}
+
+Intrinsically disordered proteins (IDPs) play central roles in neurodegenerative diseases through aberrant aggregation. Amyloid-$\beta$ 42 (A$\beta$42) aggregates into plaques in Alzheimer's disease, while islet amyloid polypeptide (IAPP) forms toxic deposits in type 2 diabetes. Understanding how mutations modulate aggregation propensity is essential for interpreting variants of uncertain significance (VUS) and guiding therapeutic development.
+
+Deep mutational scanning (DMS) has generated comprehensive maps of mutational effects on amyloid nucleation for both A$\beta$42 \cite{seuma2022} ($n$=751 single-point substitutions) and IAPP \cite{badia2026} ($n$=661). These datasets provide ground truth for benchmarking computational predictors but remain limited to specific proteins and experimental conditions.
+
+Current computational approaches for predicting mutation effects on IDP aggregation fall into two categories. Sequence-based methods, including ESM-2 log-likelihood ratios (LLR) \cite{lin2023} and the recently published CANYA neural network \cite{thompson2025}, predict aggregation propensity directly from amino acid sequence. These methods are fast but cannot capture the conformational dynamics that underlie aggregation. Structure-based methods, primarily molecular dynamics (MD) simulations, can model mutation-specific conformational changes but are computationally prohibitive for genome-scale variant interpretation.
+
+Flow matching generative models have recently emerged as powerful tools for protein conformational ensemble generation. AlphaFlow \cite{jing2024} fine-tunes AlphaFold under a flow matching objective, while P2DFlow \cite{p2dflow2025} introduces SE(3)-equivariant flow matching for ensembles. IDPFold2 \cite{idpfold2_2026} integrates mixture-of-experts into flow matching for IDP-specific ensemble prediction. However, none of these methods have been applied to predict mutation effects on IDP aggregation.
+
+Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles by conditioning on ESM-2 protein language model embeddings. We make three contributions: (1) we demonstrate that $\Delta R_g$ from flow-generated ensembles predicts amyloid nucleation scores, outperforming CANYA and providing information orthogonal to ESM-2 LLR; (2) we validate on two independent amyloid DMS datasets (A$\beta$42 and IAPP), showing generalization to an out-of-distribution protein; and (3) we discover that the direction of the $\Delta R_g$--nucleation correlation undergoes a qualitative phase transition depending on PLM scale, confirmed by a controlled experiment holding architecture constant.
+
+% ============================================================
+% Results
+% ============================================================
+\section*{Results}
+
+\subsection*{Flow matching generates mutation-specific conformational ensembles}
+
+We trained a conditional flow matching model (MutationConditionedStructureHead) that takes ESM-2 sequence embeddings, noised C$\alpha$ coordinates, and mutation position/identity as input, and outputs a velocity field for ODE integration (Fig~\ref{fig:method}). Starting from Gaussian noise, 50-step Euler integration produces C$\alpha$ coordinate ensembles of 32--64 structures per mutation. The model was trained on conformational ensembles from the Protein Ensemble Database (PED) for three IDP targets: tau K18 (PED00017), $\alpha$-synuclein (PED00024), and A$\beta$42 (PED00531).
+
+\subsection*{$\Delta R_g$ predicts amyloid nucleation scores}
+
+We scored all 751 single-point substitutions from the Seuma et al. A$\beta$42 DMS dataset \cite{seuma2022} by generating mutation-specific ensembles and computing $\Delta R_g = R_g^{\text{mut}} - R_g^{\text{WT}}$. Using ESM-2 35M embeddings, $\Delta R_g$ showed a significant positive correlation with experimental nucleation scores ($\rho$=0.229, $p$=1.4$\times$10$^{-9}$, 95\% CI [0.148, 0.285]; Fig~\ref{fig:scatter}a). This correlation survived Benjamini-Hochberg correction for multiple comparisons across 10 tests (adjusted $p$=7.1$\times$10$^{-9}$).
+
+Among seven trajectory-derived features tested, $\Delta R_g$ was the strongest individual predictor and the most important feature in both Lasso regression (weight=0.298) and Random Forest (Gini importance=0.338) models. Other trajectory features showed no significant correlation after multiple comparison correction (Fig~\ref{fig:forest}).
+
+Importantly, $\Delta R_g$ and LLR capture partially independent information: their cross-correlation was $\rho$=0.369, indicating that $\sim$86\% of the variance in $\Delta R_g$ is not explained by LLR. A composite model combining all seven features achieved a cross-validated Spearman $\rho$ of 0.285 (Gradient Boosting, 5-fold CV).
+
+\subsection*{ESM-2 scale determines correlation direction}
+
+When we repeated the analysis using ESM-2 650M embeddings, the $\Delta R_g$--nucleation correlation reversed direction: $\rho$=$-$0.219 ($p$=4.0$\times$10$^{-10}$; Fig~\ref{fig:scatter}b). The negative correlation indicates that mutations causing compaction are associated with increased nucleation, consistent with the established biophysical mechanism for A$\beta$42 aggregation.
+
+To determine whether this reversal originates from the PLM representations or the flow model architecture, we conducted a controlled experiment with identical architecture ($d_{\text{model}}$=256, $n_{\text{heads}}$=8, $n_{\text{layers}}$=6) but different ESM-2 embeddings (Table~\ref{tab:controlled}; Fig~\ref{fig:controlled}):
+
+\begin{table}[h]
+\centering
+\caption{{\bf Controlled experiment results.} All models share identical architecture; only the ESM-2 input differs.}
+\begin{tabular}{lrrrl}
+\toprule
+ESM-2 Scale & $d_{\text{seq\_in}}$ & $\rho$ & $p$-value & Direction \\
+\midrule
+35M & 480 & +0.250 & 3.6$\times$10$^{-12}$ & Positive \\
+150M & 640 & +0.205 & 1.4$\times$10$^{-8}$ & Positive \\
+650M & 1280 & $-$0.207 & 1.0$\times$10$^{-8}$ & \textbf{Negative} \\
+\bottomrule
+\end{tabular}
+\label{tab:controlled}
+\end{table}
+
+The direction reversal occurred only with ESM-2 650M, confirming that the PLM representation---not the flow model architecture---determines the sign of the structure-aggregation coupling. This qualitative phase transition between 150M and 650M has not been previously reported \cite{scaling2025,medium_plm2025}.
+
+\subsection*{Per-residue analysis reveals scale-dependent structural responses}
+
+To understand the mechanistic basis of the direction reversal, we analyzed per-residue contributions to $\Delta R_g$ for familial Alzheimer's disease (fAD) mutations (Fig~\ref{fig:perresidue}). The 35M model showed large $\Delta R_g$ contributions at the C-terminus (residues 35--42), far from the mutation sites, suggesting non-local and potentially artifactual structural responses. In contrast, the 650M model showed $\Delta R_g$ contributions concentrated near the mutation site, consistent with local structural perturbation expected from single-point mutations.
+
+\subsection*{Multi-amyloid validation on IAPP}
+
+To test generalization beyond the training distribution, we scored the Badia et al. IAPP DMS dataset \cite{badia2026} ($n$=661 single-point substitutions). IAPP was not included in the PED training data, making this a true out-of-distribution test. $\Delta R_g$ from the 35M flow model showed a significant correlation with IAPP nucleation scores ($\rho$=0.110, $p$=1.3$\times$10$^{-3}$, BH-adjusted $p$=3.1$\times$10$^{-3}$; Fig~\ref{fig:multiamyloid}).
+
+We also observed a direction asymmetry: $\Delta R_g$ correlates more strongly with slowing mutations ($\rho$=0.172, $p$=1.6$\times$10$^{-4}$) than accelerating mutations ($\rho$=0.096, NS), consistent with findings from Badia et al. \cite{badia2026}.
+
+\subsection*{Comparison with existing methods}
+
+Flow $\Delta R_g$ (35M) outperformed the recently published CANYA aggregation predictor \cite{thompson2025} on A$\beta$42 DMS ($\rho$=0.229 vs. 0.115; Fig~\ref{fig:comparison}). While CANYA is a general-purpose predictor not specifically designed for A$\beta$42, this comparison demonstrates that mutation-specific structural ensemble information provides stronger predictive signal than sequence features alone.
+
+\begin{table}[h]
+\centering
+\caption{{\bf Method comparison on A$\beta$42 DMS ($n$=751).}}
+\begin{tabular}{llrl}
+\toprule
+Method & Type & $|\rho|$ & $p$-value \\
+\midrule
+All-7 features (GB CV) & Composite & 0.285 & CV \\
+Flow $\Delta R_g$ (35M) & Structure & 0.229 & 1.4$\times$10$^{-9}$ \\
+Flow $\Delta R_g$ (650M) & Structure & 0.219 & 4.0$\times$10$^{-10}$ \\
+ESM-2 LLR & Sequence & 0.161 & 8.7$\times$10$^{-6}$ \\
+CANYA & Sequence & 0.115 & 1.6$\times$10$^{-3}$ \\
+\bottomrule
+\end{tabular}
+\label{tab:comparison}
+\end{table}
+
+% ============================================================
+% Discussion
+% ============================================================
+\section*{Discussion}
+
+\subsection*{PLM scale as a qualitative determinant}
+
+Our most unexpected finding is that the direction of the $\Delta R_g$--nucleation correlation reverses between ESM-2 150M (positive) and 650M (negative). This is qualitatively different from the quantitative scaling effects previously reported, where larger PLMs generally show improved but directionally consistent performance \cite{scaling2025}. Recent work has shown that only 39\% of protein fitness prediction tasks exhibit predictable scaling behavior. Our results extend this by demonstrating a case where scaling produces a \textit{sign change} in a downstream structural prediction.
+
+The 650M direction (compact $\rightarrow$ aggregation) aligns with the established biophysical mechanism for A$\beta$42, where collapse of the hydrophobic core (residues 16--21, KLVFFA) into compact intermediates nucleates fibril formation.
+
+\subsection*{Limitations}
+
+\textbf{In-distribution bias.} A$\beta$42 conformational ensembles from PED were included in the training data. The higher A$\beta$42 performance ($\rho$=0.229) relative to the out-of-distribution IAPP ($\rho$=0.110) likely reflects this bias. We emphasize the IAPP result as the more conservative estimate of generalization.
+
+\textbf{Unphysical absolute structures.} While the 35M model produces ensembles with reasonable wild-type $R_g$ ($\sim$27~\AA{} for 42-residue A$\beta$42), the controlled-experiment models with 150M and 650M embeddings produced unphysical structures ($R_g > 100$~\AA). Relative $\Delta R_g$ rank ordering is preserved, but absolute structures should not be interpreted as physical conformations.
+
+\textbf{Cross-protein transfer failure.} Transfer from A$\beta$42 DMS to tau/$\alpha$-synuclein disease mutations was not successful (all $\rho$ values NS), consistent with Badia et al.'s finding that aggregation-accelerating mutations do not transfer across amyloids \cite{badia2026}.
+
+\textbf{CANYA comparison.} CANYA is a general-purpose predictor, while our model was trained on A$\beta$42-containing data. The comparison should be interpreted as ``specialized structure-based vs. general sequence-based,'' not as universal superiority.
+
+% ============================================================
+% Methods
+% ============================================================
+\section*{Materials and Methods}
+
+\subsection*{Conditional flow matching model}
+
+The MutationConditionedStructureHead is a Transformer-based velocity network with 6 layers, 256-dimensional hidden states, and 8 attention heads. Input features include ESM-2 sequence embeddings (projected to $d_{\text{model}}$), noised C$\alpha$ coordinates encoded as RBF distance features (16 bins, max 20~\AA), and mutation position/amino acid embeddings (32-dimensional). The model is trained with the conditional flow matching objective \cite{lipman2023} using AdamW optimizer, cosine learning rate schedule, and EMA (decay 0.999).
+
+\subsection*{ESM-2 embeddings}
+
+Three ESM-2 model scales were used: esm2\_t12\_35M\_UR50D (480-dim), esm2\_t30\_150M\_UR50D (640-dim), and esm2\_t33\_650M\_UR50D (1280-dim) \cite{lin2023}. For the controlled experiment, all embedding dimensions were projected to $d_{\text{model}}$=256 via a learned linear layer.
+
+\subsection*{DMS datasets}
+
+A$\beta$42 nucleation scores for 751 substitutions from Seuma et al. \cite{seuma2022}. IAPP nucleation scores for 661 substitutions from Badia et al. \cite{badia2026}, processed from the singles.df table ($nscore\_c$ column).
+
+\subsection*{Statistical analysis}
+
+Spearman rank correlation for all analyses. Bootstrap 95\% confidence intervals from 10,000 resamples. Benjamini-Hochberg correction across all tested features. Cross-validated performance with 5-fold CV using Gradient Boosting and Lasso regression.
+
+\subsection*{Code availability}
+
+All code is available at \url{https://github.com/layeredlabs06/brain-idp-flow}. The master pipeline notebook (\texttt{colab/10\_master\_pipeline.ipynb}) reproduces all results.
+
+% ============================================================
+% References
+% ============================================================
+\bibliographystyle{plos2015}
+\bibliography{references}
+
+% ============================================================
+% Figure Legends
+% ============================================================
+\section*{Figure Legends}
+
+\begin{figure}[h]
+\caption{{\bf $\Delta R_g$ from flow-generated ensembles correlates with A$\beta$42 nucleation scores.} (a) ESM-2 35M model shows positive correlation ($\rho$=0.229). (b) ESM-2 650M model shows reversed negative correlation ($\rho$=$-$0.219). Red circles indicate familial Alzheimer's disease (fAD) mutations. $n$=751 single-point substitutions from Seuma et al.}
+\label{fig:scatter}
+\end{figure}
+
+\begin{figure}[h]
+\caption{{\bf Controlled experiment confirms PLM representation causes direction reversal.} Three flow models with identical architecture ($d$=256, $L$=6) but different ESM-2 inputs. Direction reversal occurs only with ESM-2 650M, ruling out architectural differences as the cause.}
+\label{fig:controlled}
+\end{figure}
+
+\begin{figure}[h]
+\caption{{\bf Per-residue $\Delta R_g$ contributions reveal scale-dependent structural responses.} 35M model (left) shows non-local responses distant from the mutation site. 650M model (right) shows responses concentrated near the mutation site. Dashed lines indicate mutation positions. Shown for three fAD mutations: D7N, D7H, E11K.}
+\label{fig:perresidue}
+\end{figure}
+
+\begin{figure}[h]
+\caption{{\bf Multi-amyloid validation.} (a) A$\beta$42 (in-distribution, $\rho$=0.229, $n$=751). (b) IAPP (out-of-distribution, $\rho$=0.110, $n$=661). IAPP was not in the training data, demonstrating generalization.}
+\label{fig:multiamyloid}
+\end{figure}
+
+\begin{figure}[h]
+\caption{{\bf Forest plot of feature correlations with nucleation score.} Bootstrap 95\% confidence intervals from 10,000 resamples. Filled circles: BH-corrected $p<0.05$. Crosses: not significant. Blue: A$\beta$42, Green: IAPP, Gray: trajectory features (NS).}
+\label{fig:forest}
+\end{figure}
+
+\begin{figure}[h]
+\caption{{\bf Method comparison on A$\beta$42 DMS.} Spearman $|\rho|$ with nucleation score. Flow $\Delta R_g$ outperforms sequence-based CANYA and ESM-2 LLR as individual predictors.}
+\label{fig:comparison}
+\end{figure}
+
+\end{document}
