@@ -41,7 +41,7 @@
 
 % Title
 \begin{flushleft}
-{\Large\textbf{Protein Language Model Scale Determines the Direction of Structure-Aggregation Coupling in Intrinsically Disordered Proteins}}
+{\Large\textbf{Structure Generation Inverts Aggregation Signals from Large Protein Language Models in Intrinsically Disordered Proteins}}
 \newline
 \\
 % Authors
@@ -75,7 +75,7 @@ All code and analysis pipelines are publicly available at \url{https://github.co
 % ============================================================
 \section*{Abstract}
 
-Predicting how mutations affect the aggregation propensity of intrinsically disordered proteins (IDPs) is critical for understanding neurodegenerative diseases, yet existing methods rely primarily on sequence-based features. Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles from protein language model (PLM) embeddings, enabling structure-based aggregation prediction without molecular dynamics simulation. Evaluating on deep mutational scanning (DMS) data for amyloid-$\beta$ 42 (A$\beta$42, $n$=751) and islet amyloid polypeptide (IAPP, $n$=661), we show that the change in radius of gyration ($\Delta R_g$) from flow-generated ensembles correlates significantly with experimental nucleation scores (A$\beta$42: $\rho$=0.229, $p$=1.4$\times$10$^{-9}$; IAPP: $\rho$=0.110, $p$=1.3$\times$10$^{-3}$), outperforming the sequence-based CANYA predictor ($\rho$=0.115) while providing orthogonal information to ESM-2 log-likelihood ratios (LLR). Unexpectedly, we discover that the \textit{direction} of the $\Delta R_g$--nucleation correlation reverses depending on PLM scale: ESM-2 35M and 150M yield positive correlations, while ESM-2 650M yields a negative correlation, even when architecture is held constant. This qualitative phase transition in PLM representations has not been previously reported and suggests that larger PLMs encode fundamentally different structural information about IDP conformational dynamics.
+Predicting how mutations affect the aggregation propensity of intrinsically disordered proteins (IDPs) is critical for understanding neurodegenerative diseases. Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles from protein language model (PLM) embeddings. Evaluating on deep mutational scanning (DMS) data for amyloid-$\beta$ 42 (A$\beta$42, $n$=751) and islet amyloid polypeptide (IAPP, $n$=661), we discover a scale-dependent direction reversal: $\Delta R_g$ from ESM-2 35M correlates positively with nucleation scores ($\rho$=+0.229), while ESM-2 650M yields a negative correlation ($\rho$=$-$0.219). However, layer-wise linear probing reveals that both PLMs encode aggregation propensity in the \textit{same} positive direction ($\rho$=0.40--0.66 across all layers and scales), demonstrating that the reversal originates not in the PLM representations but in the flow model's conversion of embeddings to three-dimensional structures. Cross-scale CKA analysis shows that 650M late layers have no representational counterpart in 35M, yet both encode nucleation equally well. Combining the opposing $\Delta R_g$ signals from both scales yields a 47\% improvement ($\rho$=0.349, 5-fold CV), but a simple Ridge regression on raw ESM-2 embeddings achieves $\rho$=0.60 without any structure generation---revealing that the flow model loses more information than it adds. These findings demonstrate that generative structure models can systematically distort PLM-encoded biological signals and caution against interpreting structural predictions as faithful reflections of the underlying sequence representations.
 
 % ============================================================
 % Introduction
@@ -90,7 +90,7 @@ Current computational approaches for predicting mutation effects on IDP aggregat
 
 Flow matching generative models have recently emerged as powerful tools for protein conformational ensemble generation. AlphaFlow \cite{jing2024} fine-tunes AlphaFold under a flow matching objective, while P2DFlow \cite{p2dflow2025} introduces SE(3)-equivariant flow matching for ensembles. IDPFold2 \cite{idpfold2_2026} integrates mixture-of-experts into flow matching for IDP-specific ensemble prediction. However, none of these methods have been applied to predict mutation effects on IDP aggregation.
 
-Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles by conditioning on ESM-2 protein language model embeddings. We make three contributions: (1) we demonstrate that $\Delta R_g$ from flow-generated ensembles predicts amyloid nucleation scores, outperforming CANYA and providing information orthogonal to ESM-2 LLR; (2) we validate on two independent amyloid DMS datasets (A$\beta$42 and IAPP), showing generalization to an out-of-distribution protein; and (3) we discover that the direction of the $\Delta R_g$--nucleation correlation undergoes a qualitative phase transition depending on PLM scale, confirmed by a controlled experiment holding architecture constant.
+Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles by conditioning on ESM-2 protein language model embeddings. We make four contributions: (1) we demonstrate that $\Delta R_g$ from flow-generated ensembles predicts amyloid nucleation scores, outperforming CANYA and providing information orthogonal to ESM-2 LLR; (2) we discover that the direction of the $\Delta R_g$--nucleation correlation reverses depending on PLM scale, and that combining opposing signals from two scales yields a 47\% improvement ($\rho$=0.349); (3) through layer-wise linear probing and CKA analysis, we show that the reversal originates in the structure generation model, not in the PLM embeddings, which encode aggregation in the same direction across all scales ($\rho$=0.40--0.66); and (4) we demonstrate that raw ESM-2 embeddings outperform the full structural pipeline, revealing a systematic information bottleneck in generative structure models.
 
 % ============================================================
 % Results
@@ -130,7 +130,66 @@ ESM-2 Scale & $d_{\text{seq\_in}}$ & $\rho$ & $p$-value & Direction \\
 \label{tab:controlled}
 \end{table}
 
-The direction reversal occurred only with ESM-2 650M, confirming that the PLM representation---not the flow model architecture---determines the sign of the structure-aggregation coupling. This qualitative phase transition between 150M and 650M has not been previously reported \cite{scaling2025,medium_plm2025}.
+The direction reversal occurred only with ESM-2 650M, confirming that the sign change is linked to PLM scale, not flow model architecture. This qualitative phase transition between 150M and 650M has not been previously reported \cite{scaling2025,medium_plm2025}. However, as we show below, the origin of this reversal is more subtle than a change in PLM representation.
+
+\subsection*{Cross-scale combination yields 47\% improvement}
+
+Because the 35M and 650M $\Delta R_g$ signals are anticorrelated yet both significantly predict nucleation, they carry complementary information. We combined both $\Delta R_g$ values along with their product (interaction term) and absolute difference (divergence) as features in a Gradient Boosting model with 5-fold cross-validation:
+
+\begin{table}[h]
+\centering
+\caption{{\bf Cross-scale combination results on A$\beta$42 DMS ($n$=751, 5-fold CV).}}
+\begin{tabular}{lrr}
+\toprule
+Feature Set & LR CV $\rho$ & GB CV $\rho$ \\
+\midrule
+$\Delta R_g$ 35M only & 0.237 & 0.235 \\
+$\Delta R_g$ 650M only & 0.218 & 0.209 \\
+Cross-scale $\Delta R_g$ & 0.300 & 0.291 \\
+Cross-scale full (4 features) & 0.267 & 0.311 \\
+LLR + cross-scale full & 0.274 & \textbf{0.349} \\
+\bottomrule
+\end{tabular}
+\label{tab:crossscale}
+\end{table}
+
+The best model (LLR + cross-scale full, Gradient Boosting) achieved $\rho$=0.349, a 47\% improvement over the single-scale baseline ($\rho$=0.237). This confirms that the direction reversal contains exploitable complementary information.
+
+\subsection*{Reversal originates in the flow model, not PLM embeddings}
+
+To determine whether the direction reversal reflects a genuine difference in how PLMs encode aggregation, we trained Ridge regression probes directly from per-layer ESM-2 representations to nucleation scores, bypassing the flow model entirely.
+
+Strikingly, both 35M and 650M embeddings predicted nucleation scores in the \textit{same positive direction} at every layer (Fig~\ref{fig:layerrho}). ESM-2 35M Layer 1 achieved $\rho$=0.660, and 650M Layer 2 achieved $\rho$=0.622. Even with PCA reduction to 10 components (eliminating overfitting concerns), both scales maintained strong positive correlations (35M: $\rho$=0.396; 650M: $\rho$=0.426).
+
+This demonstrates that the scale-dependent direction reversal does not originate in the PLM representations. Both models encode aggregation propensity equally well and in the same direction. The reversal arises from the flow model's conversion of embeddings to three-dimensional coordinates, where the mapping from embedding space to structural space ($\Delta R_g$) differs qualitatively between scales.
+
+\subsection*{CKA analysis reveals representational divergence without directional change}
+
+To understand the relationship between 35M and 650M representations, we computed linear CKA (Centered Kernel Alignment \cite{kornblith2019}) across all layer pairs (Fig~\ref{fig:cka}). The CKA matrix reveals that 650M early layers (0--10) are representationally similar to 35M mid layers (2--6; CKA$>$0.6), while 650M late layers (15+) have no counterpart in 35M (CKA$<$0.2). Despite this structural divergence, both encode nucleation scores with comparable accuracy---the 650M-specific late-layer representations do not invert the biological signal; they simply encode it through a different representational geometry that the flow model interprets differently.
+
+\subsection*{Raw embeddings outperform the structural pipeline}
+
+A Ridge regression probe on ESM-2 35M Layer 1 mean-pooled embeddings achieved $\rho$=0.660---nearly double the best cross-scale flow model result ($\rho$=0.349) and triple the single-scale result ($\rho$=0.229). This performance held across PCA dimensionalities:
+
+\begin{table}[h]
+\centering
+\caption{{\bf Direct embedding probe vs. flow model on A$\beta$42.}}
+\begin{tabular}{llr}
+\toprule
+Method & Features & CV $\rho$ \\
+\midrule
+ESM-2 35M L1 probe & 480 & 0.660 \\
+ESM-2 650M L2 probe & 1280 & 0.622 \\
+ESM-2 35M L1 probe (PCA-50) & 50 & 0.602 \\
+ESM-2 650M L2 probe (PCA-10) & 10 & 0.426 \\
+LLR + cross-scale flow (GB) & 5 & 0.349 \\
+Flow $\Delta R_g$ 35M & 1 & 0.229 \\
+\bottomrule
+\end{tabular}
+\label{tab:bottleneck}
+\end{table}
+
+The flow model thus acts as an information bottleneck: it compresses rich 480/1280-dimensional PLM representations into a single scalar ($\Delta R_g$), losing approximately 65\% of the predictive signal. While the flow model provides interpretable structural ensembles, it does so at a substantial cost to predictive accuracy.
 
 \subsection*{Per-residue analysis reveals scale-dependent structural responses}
 
@@ -151,13 +210,17 @@ Flow $\Delta R_g$ (35M) outperformed the recently published CANYA aggregation pr
 \caption{{\bf Method comparison on A$\beta$42 DMS ($n$=751).}}
 \begin{tabular}{llrl}
 \toprule
-Method & Type & $|\rho|$ & $p$-value \\
+Method & Type & $\rho$ & Note \\
 \midrule
-All-7 features (GB CV) & Composite & 0.285 & CV \\
-Flow $\Delta R_g$ (35M) & Structure & 0.229 & 1.4$\times$10$^{-9}$ \\
-Flow $\Delta R_g$ (650M) & Structure & 0.219 & 4.0$\times$10$^{-10}$ \\
-ESM-2 LLR & Sequence & 0.161 & 8.7$\times$10$^{-6}$ \\
-CANYA & Sequence & 0.115 & 1.6$\times$10$^{-3}$ \\
+ESM-2 35M L1 probe & Embedding & 0.660 & 5-fold CV \\
+ESM-2 650M L2 probe & Embedding & 0.622 & 5-fold CV \\
+ESM-2 35M probe (PCA-10) & Embedding & 0.396 & overfit control \\
+LLR + cross-scale (GB) & Composite & 0.349 & 5-fold CV \\
+All-7 features (GB CV) & Composite & 0.285 & 5-fold CV \\
+Flow $\Delta R_g$ (35M) & Structure & 0.229 & single feature \\
+Flow $\Delta R_g$ (650M) & Structure & $-$0.219 & single feature \\
+ESM-2 LLR & Sequence & 0.161 & single feature \\
+CANYA & Sequence & 0.115 & single feature \\
 \bottomrule
 \end{tabular}
 \label{tab:comparison}
@@ -168,21 +231,33 @@ CANYA & Sequence & 0.115 & 1.6$\times$10$^{-3}$ \\
 % ============================================================
 \section*{Discussion}
 
-\subsection*{PLM scale as a qualitative determinant}
+\subsection*{Structure generation as information bottleneck}
 
-Our most unexpected finding is that the direction of the $\Delta R_g$--nucleation correlation reverses between ESM-2 150M (positive) and 650M (negative). This is qualitatively distinct from the quantitative scaling effects previously reported, where larger PLMs generally show improved but directionally consistent performance \cite{scaling2025}. Recent work has shown that only 39\% of protein fitness prediction tasks exhibit predictable scaling behavior \cite{medium_plm2025}. Our results extend this observation by demonstrating a case where scaling produces a \textit{sign change} in a downstream structural prediction, not merely a change in magnitude.
+Our central finding is that generative structure models can systematically distort the biological signals encoded in protein language model embeddings. ESM-2 embeddings at both 35M and 650M scales encode aggregation propensity in the same positive direction ($\rho$=0.40--0.66), yet the flow model converts these into $\Delta R_g$ values with opposite signs. This means the widely observed ``scaling effect'' in our structural predictions is not a property of the PLM representations but an artifact of how the structure generation model interprets them.
 
-The 650M direction (compact $\rightarrow$ aggregation) aligns with the established biophysical mechanism for A$\beta$42, where collapse of the hydrophobic core (residues 16--21, KLVFFA) into compact intermediates nucleates fibril formation.
+The information bottleneck is quantitatively severe: compressing 480-dimensional ESM-2 embeddings ($\rho$=0.66) into a single $\Delta R_g$ scalar ($\rho$=0.23) loses approximately 65\% of predictive signal. This finding has practical implications for the growing number of methods that chain PLM embeddings through generative structure models---the intermediate structure generation step may not preserve the task-relevant information encoded in the embeddings.
+
+\subsection*{Why does the flow model invert the 650M signal?}
+
+We propose that the reversal reflects a fundamental difference in how the flow model maps embedding geometry to physical structure. The 35M flow model (trained with 480-dim input) learns to associate aggregation-promoting mutations with extended conformations ($\Delta R_g > 0$), while the 650M model (trained with 1280-dim input) associates the same mutations with compact conformations ($\Delta R_g < 0$). CKA analysis shows that 650M late layers (15+) have no representational counterpart in 35M, suggesting the 650M model uses a qualitatively different geometric mapping for structure generation.
+
+Notably, the 650M direction (compact $\rightarrow$ aggregation) aligns with the established biophysical mechanism for A$\beta$42, where hydrophobic core collapse nucleates fibril formation. The 35M direction (extended $\rightarrow$ aggregation) may reflect exposure of aggregation-prone regions. Both are physically plausible mechanisms, but the flow model can only represent one per scale.
+
+\subsection*{Implications for PLM-based prediction}
+
+Our results suggest that for mutation effect prediction, raw PLM embeddings with simple linear models may outperform elaborate generative pipelines. The Ridge probe achieves $\rho$=0.60 with no structure generation, no GPU-intensive sampling, and no training of additional models. This aligns with recent observations that medium-sized PLMs perform well at transfer learning \cite{medium_plm2025} and that only 39\% of protein fitness tasks show predictable scaling behavior \cite{scaling2025}.
+
+However, structure generation provides something that embedding probes cannot: interpretable three-dimensional ensembles. The per-residue $\Delta R_g$ analysis (Fig~\ref{fig:perresidue}) reveals spatially resolved structural responses to mutations, which is valuable for mechanistic understanding even if the aggregate $\Delta R_g$ scalar is a lossy summary.
 
 \subsection*{Limitations}
 
-\textbf{In-distribution bias.} A$\beta$42 conformational ensembles from PED were included in the training data. The higher A$\beta$42 performance ($\rho$=0.229) relative to the out-of-distribution IAPP ($\rho$=0.110) likely reflects this bias. We emphasize the IAPP result as the more conservative estimate of generalization.
+\textbf{In-distribution bias.} A$\beta$42 conformational ensembles from PED were included in the training data. The higher A$\beta$42 flow model performance ($\rho$=0.229) relative to out-of-distribution IAPP ($\rho$=0.110) likely reflects this bias. Cross-scale combination did not improve IAPP predictions, consistent with the 650M flow model producing near-zero signal for out-of-distribution proteins.
 
-\textbf{Unphysical absolute structures.} While the 35M model produces ensembles with reasonable wild-type $R_g$ ($\sim$27~\AA{} for 42-residue A$\beta$42), the controlled-experiment models with 150M and 650M embeddings produced unphysical structures ($R_g > 100$~\AA). Relative $\Delta R_g$ rank ordering is preserved, but absolute structures should not be interpreted as physical conformations.
+\textbf{Embedding probe generalization.} The $\rho$=0.66 Ridge probe result is for A$\beta$42 only. Whether raw ESM-2 embeddings generalize to other amyloid systems with comparable accuracy remains to be tested. The high dimensionality of the probe (480 features, 751 samples) warrants caution, though PCA-10 controls ($\rho$=0.40) confirm the signal is robust.
 
-\textbf{Cross-protein transfer failure.} Transfer from A$\beta$42 DMS to tau/$\alpha$-synuclein disease mutations was not successful (all $\rho$ values NS), consistent with Badia et al.'s finding that aggregation-accelerating mutations do not transfer across amyloids \cite{badia2026}.
+\textbf{Unphysical absolute structures.} While relative $\Delta R_g$ rank ordering is informative, the controlled-experiment models produced unphysical structures ($R_g > 100$~\AA{}). Absolute structures should not be interpreted as physical conformations.
 
-\textbf{CANYA comparison.} CANYA is a general-purpose predictor, while our model was trained on A$\beta$42-containing data. The comparison should be interpreted as ``specialized structure-based vs. general sequence-based,'' not as universal superiority.
+\textbf{Cross-protein transfer failure.} Transfer from A$\beta$42 DMS to tau/$\alpha$-synuclein disease mutations was not successful, consistent with protein-specific aggregation mechanisms \cite{badia2026}.
 
 % ============================================================
 % Methods
@@ -201,9 +276,15 @@ Three ESM-2 model scales were used: esm2\_t12\_35M\_UR50D (480-dim), esm2\_t30\_
 
 A$\beta$42 nucleation scores for 751 substitutions from Seuma et al. \cite{seuma2022}. IAPP nucleation scores for 661 substitutions from Badia et al. \cite{badia2026}, processed from the singles.df table ($nscore\_c$ column).
 
+\subsection*{Layer-wise embedding analysis}
+
+To determine whether the direction reversal originates in PLM representations or the flow model, we extracted mean-pooled representations from every transformer layer of ESM-2 35M (13 layers) and 650M (34 layers) for all 751 A$\beta$42 mutant sequences. For each layer, a Ridge regression probe ($\alpha$=1.0) was trained with 5-fold cross-validation to predict nucleation scores directly from the layer's representation, with StandardScaler fitted within each fold to prevent data leakage. PCA-reduced variants (10, 30, 50, 100 components) served as overfitting controls.
+
+Cross-scale representational similarity was quantified using linear CKA (Centered Kernel Alignment) \cite{kornblith2019}, computed on the Gram matrices $K = XX^T$ and $L = YY^T$ to handle different embedding dimensions across scales.
+
 \subsection*{Statistical analysis}
 
-Spearman rank correlation for all analyses. Bootstrap 95\% confidence intervals from 10,000 resamples. Benjamini-Hochberg correction across all tested features. Cross-validated performance with 5-fold CV using Gradient Boosting and Lasso regression.
+Spearman rank correlation for all analyses. Bootstrap 95\% confidence intervals from 10,000 resamples. Benjamini-Hochberg correction across all tested features. Cross-validated performance with 5-fold CV using Gradient Boosting, Lasso regression, and Ridge regression.
 
 \subsection*{Code availability}
 
@@ -264,6 +345,20 @@ Claude (Anthropic) was used to assist with code development, data analysis pipel
 \includegraphics[width=0.6\textwidth]{a6.png}
 \caption{{\bf Method comparison on A$\beta$42 DMS.} Spearman $|\rho|$ with nucleation score. Flow $\Delta R_g$ outperforms sequence-based CANYA and ESM-2 LLR as individual predictors.}
 \label{fig:comparison}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{cka_and_layer_rho.png}
+\caption{{\bf Reversal originates in the flow model, not PLM embeddings.} Left: Cross-scale CKA heatmap between ESM-2 35M (13 layers) and 650M (34 layers). Early 650M layers are representationally similar to 35M mid layers (CKA$>$0.6), while late 650M layers have no 35M counterpart (CKA$<$0.2). Right: Per-layer Spearman $\rho$ between Ridge-predicted nucleation scores and experimental values. Both 35M (blue, all positive, $\rho$=0.43--0.66) and 650M (red, all positive, $\rho$=0.43--0.62) encode aggregation in the same direction at every layer. The two curves never cross zero, demonstrating that the flow model---not the PLM---is responsible for the direction reversal.}
+\label{fig:layerrho}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{cka_heatmap.png}
+\caption{{\bf Cross-scale CKA similarity matrix.} Linear CKA between all (35M layer, 650M layer) pairs, computed on mean-pooled representations of 751 A$\beta$42 mutant sequences. The block-diagonal structure shows that 650M layers 0--10 correspond to 35M layers 2--6, while 650M layers 15+ occupy a representational space not captured by the smaller model.}
+\label{fig:cka}
 \end{figure}
 
 \end{document}
