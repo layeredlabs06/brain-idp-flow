@@ -131,7 +131,7 @@ ESM-2 Scale & $d_{\text{seq\_in}}$ & $\rho$ & $p$-value & Direction \\
 \label{tab:controlled}
 \end{table}
 
-The direction reversal occurred with ESM-2 650M and persisted with 3B, but with dramatically reduced magnitude ($\rho$=$-$0.076 vs. $-$0.207). This reveals a non-monotonic pattern: the reversal emerges between 150M and 650M, then the signal collapses at 3B scale despite richer input representations (2560-dim). The flow model's capacity to extract aggregation-relevant structural information degrades with increasing embedding dimensionality, consistent with an information bottleneck that worsens at scale. Crucially, as we show below, the PLM embeddings themselves do not invert the aggregation signal---the reversal arises specifically in how the flow model converts different-scale embeddings into three-dimensional structures.
+The direction reversal occurred with ESM-2 650M and persisted with 3B, but with dramatically reduced magnitude ($\rho$=$-$0.076 vs. $-$0.207; Fig~\ref{fig:threescale}). This reveals a non-monotonic pattern: the reversal emerges between 150M and 650M, then the signal collapses at 3B scale despite richer input representations (2560-dim). The flow model's capacity to extract aggregation-relevant structural information degrades with increasing embedding dimensionality, consistent with an information bottleneck that worsens at scale. Crucially, as we show below, the PLM embeddings themselves do not invert the aggregation signal---the reversal arises specifically in how the flow model converts different-scale embeddings into three-dimensional structures.
 
 \subsection*{Cross-scale combination yields 47\% improvement}
 
@@ -409,6 +409,13 @@ Claude (Anthropic) was used to assist with code development, data analysis pipel
 \includegraphics[width=0.8\textwidth]{hybrid_feature_contribution.png}
 \caption{{\bf Feature contributions for fAD mutation D7N.} Top 15 features by Gradient Boosting importance $\times$ feature deviation for the familial Alzheimer's disease mutation D7N. All 15 contributing features are PCA components of ESM-2 embeddings; no structural feature (e.g., $\Delta R_g$, contact entropy, $\beta$-sheet propensity) appears in the ranking, confirming that the hybrid model's predictions are driven entirely by PLM representations.}
 \label{fig:contribution}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{three_scale_scatter.png}
+\caption{{\bf Three-scale comparison reveals non-monotonic information bottleneck.} $\Delta R_g$ vs. nucleation score for ESM-2 35M ($\rho$=+0.229, positive), 650M ($\rho$=$-$0.219, negative), and 3B ($\rho$=$-$0.076, near-zero). The reversal emerges between 150M and 650M, then the signal collapses at 3B scale despite richer 2560-dimensional input. Red circles: fAD mutations. $n$=751.}
+\label{fig:threescale}
 \end{figure}
 
 \end{document}
