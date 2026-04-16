@@ -1,11 +1,14 @@
-"""Gradio web app for hybrid aggregation prediction.
+"""Gradio web app for IDP aggregation prediction.
+
+ESM-2 embedding-only predictor. No flow model needed.
 
 Usage:
     python -m brain_idp_flow.app
-    # or: gradio src/brain_idp_flow/app.py
+    # or with custom model:
+    MODEL_PATH=runs/embedding_predictor.pkl python -m brain_idp_flow.app
 
 Inputs: protein sequence + mutation (e.g. "E22G")
-Outputs: aggregation risk score, feature contribution chart, Rg distribution plot
+Outputs: aggregation risk score, PCA feature importance chart
 """
 
 from __future__ import annotations
@@ -20,12 +23,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# Lazy globals — loaded once on first prediction
+# Lazy globals
 _embedder = None
-_flow_model = None
-_scorer = None
 _predictor = None
-_config = None
 _device = None
 
 
@@ -47,42 +47,18 @@ def _load_embedder():
     return _embedder
 
 
-def _load_scorer():
-    global _scorer
-    if _scorer is None:
-        from brain_idp_flow.analysis.esm2_llr import ESM2MutationScorer
-        _scorer = ESM2MutationScorer(device=_get_device())
-    return _scorer
-
-
-def _load_flow_model():
-    global _flow_model, _config
-    if _flow_model is None:
-        import yaml
-        from brain_idp_flow.sample import load_model
-
-        config_path = os.environ.get("FLOW_CONFIG", "configs/flow.yaml")
-        ckpt_path = os.environ.get("FLOW_CKPT", "runs/flow_35m/best.pt")
-
-        _config = yaml.safe_load(open(config_path))
-        _flow_model = load_model(_config, ckpt_path, _get_device())
-    return _flow_model
-
-
 def _load_predictor():
     global _predictor
     if _predictor is None:
-        import pickle
+        from brain_idp_flow.model.embedding_predictor import EmbeddingAggregationPredictor
 
-        model_path = os.environ.get("HYBRID_MODEL", "runs/hybrid_predictor.pkl")
+        model_path = os.environ.get("MODEL_PATH", "runs/embedding_predictor.pkl")
         if Path(model_path).exists():
-            with open(model_path, "rb") as f:
-                _predictor = pickle.load(f)
+            _predictor = EmbeddingAggregationPredictor.load(model_path)
+            print(f"Loaded model from {model_path}")
         else:
-            from brain_idp_flow.model.hybrid_predictor import HybridAggregationPredictor
-            _predictor = HybridAggregationPredictor()
-            print(f"WARNING: No pre-trained hybrid model at {model_path}. "
-                  f"Predictions will fail until fit() is called.")
+            _predictor = EmbeddingAggregationPredictor()
+            print(f"WARNING: No model at {model_path}. Run training first.")
     return _predictor
 
 
@@ -109,147 +85,72 @@ def _parse_mutation(mutation_str: str) -> tuple[str, int, str]:
 def predict(sequence: str, mutation: str) -> tuple:
     """Main prediction function for Gradio interface.
 
-    Args:
-        sequence: protein amino acid sequence
-        mutation: mutation string (e.g., "E22G")
-
     Returns:
-        (score_text, contribution_fig, rg_fig)
+        (score_markdown, importance_figure)
     """
     try:
         wt_aa, pos, mt_aa = _parse_mutation(mutation)
     except ValueError as e:
-        return str(e), None, None
+        return str(e), None
 
-    # Validate position
     if pos < 1 or pos > len(sequence):
-        return f"Position {pos} out of range (sequence length: {len(sequence)})", None, None
+        return f"Position {pos} out of range (sequence length: {len(sequence)})", None
     if sequence[pos - 1] != wt_aa:
         return (
             f"WT amino acid mismatch: expected '{wt_aa}' at position {pos}, "
             f"found '{sequence[pos - 1]}'",
-            None, None,
+            None,
         )
 
-    device = _get_device()
     embedder = _load_embedder()
-    scorer = _load_scorer()
-    flow_model = _load_flow_model()
     predictor = _load_predictor()
 
-    # 1. ESM-2 embedding (mean-pooled)
+    # Compute mutant embedding (mean-pooled)
     mut_seq = list(sequence)
     mut_seq[pos - 1] = mt_aa
     mut_seq_str = "".join(mut_seq)
 
-    mut_emb_full = embedder.embed_single(mut_seq_str)  # (L, D)
-    mut_emb_pooled = mut_emb_full.mean(dim=0).cpu().numpy()  # (D,)
+    emb = embedder.embed_single(mut_seq_str)  # (L, D)
+    emb_pooled = emb.mean(dim=0).cpu().numpy()  # (D,)
 
-    # 2. ESM-2 LLR
-    llr_result = scorer.score_mutation(sequence, pos, wt_aa, mt_aa, fast=True)
-    llr_value = llr_result["llr_site"]
-
-    # 3. Flow ensembles
-    from brain_idp_flow.sample import sample_ensemble
-    from brain_idp_flow.model.hybrid_predictor import EnsembleFeatureExtractor
-
-    wt_emb = embedder.embed_single(sequence)
-    AA_TO_IDX = {aa: i + 1 for i, aa in enumerate("ACDEFGHIKLMNPQRSTVWY")}
-    mut_aa_idx = AA_TO_IDX.get(mt_aa, 0)
-
-    wt_ensemble = sample_ensemble(
-        flow_model, wt_emb, mut_pos=0, mut_aa=0,
-        n_samples=100, n_steps=50, device=device, batch_size=32,
-    )
-    mut_ensemble = sample_ensemble(
-        flow_model, mut_emb_full, mut_pos=pos, mut_aa=mut_aa_idx,
-        n_samples=100, n_steps=50, device=device, batch_size=32,
-    )
-
-    # 4. Structural features
-    extractor = EnsembleFeatureExtractor()
-    struct_feats = extractor.extract(wt_ensemble, mut_ensemble, pos)
-
-    # 5. Predict
     if not predictor.is_fitted:
-        score_text = (
-            f"**Hybrid model not trained yet.**\n\n"
-            f"Structural features extracted:\n"
-            + "\n".join(f"- {k}: {v:.4f}" for k, v in struct_feats.items())
-            + f"\n- LLR: {llr_value:.4f}"
-        )
-        score = 0.0
-    else:
-        score = predictor.predict_single(mut_emb_pooled, struct_feats, llr_value)
-        risk = "HIGH" if score > 0.5 else "MEDIUM" if score > 0 else "LOW"
-        score_text = (
-            f"## Aggregation Risk: **{risk}**\n\n"
-            f"Score: **{score:.3f}**\n\n"
-            f"| Feature | Value |\n|---|---|\n"
-            + "\n".join(f"| {k} | {v:.4f} |" for k, v in struct_feats.items())
-            + f"\n| LLR | {llr_value:.4f} |"
-        )
+        return "**Model not trained.** Run `colab/11_hybrid_model.ipynb` first.", None
 
-    # 6. Feature contribution chart
-    contribution_fig = _plot_contributions(
-        predictor, mut_emb_pooled, struct_feats, llr_value, mutation,
+    result = predictor.predict_single(emb_pooled)
+
+    # Risk color
+    color = {"HIGH": "red", "MEDIUM": "orange", "LOW": "green"}[result.risk_level]
+
+    score_text = (
+        f"## Aggregation Risk: **<span style='color:{color}'>{result.risk_level}</span>**\n\n"
+        f"**Score: {result.score:.3f}**\n\n"
+        f"Positive = more aggregation-prone than WT\n\n"
+        f"---\n\n"
+        f"*Prediction based on ESM-2 35M embeddings (PCA-50, GBRegressor)*\n\n"
+        f"*CV performance on Aβ42 DMS: ρ=0.595 [0.543, 0.641]*"
     )
 
-    # 7. Rg distribution comparison
-    from brain_idp_flow.geometry.metrics import radius_of_gyration
-    rg_wt = radius_of_gyration(torch.from_numpy(wt_ensemble)).numpy()
-    rg_mut = radius_of_gyration(torch.from_numpy(mut_ensemble)).numpy()
-    rg_fig = _plot_rg_distributions(rg_wt, rg_mut, mutation)
+    # Feature importance chart
+    fig = _plot_importance(result.top_features, mutation)
 
-    return score_text, contribution_fig, rg_fig
+    return score_text, fig
 
 
-def _plot_contributions(
-    predictor,
-    embedding: np.ndarray,
-    struct_feats: dict,
-    llr_value: float,
-    mutation: str,
-) -> Optional[plt.Figure]:
-    """Plot feature contributions bar chart."""
-    if not predictor.is_fitted:
-        return None
-
-    contributions = predictor.explain(embedding, struct_feats, llr_value)
-    top = contributions[:12]
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    names = [c.name for c in top]
-    vals = [c.contribution for c in top]
-    colors = ["#d73027" if v > 0 else "#4575b4" for v in vals]
-
-    ax.barh(range(len(top)), vals, color=colors)
-    ax.set_yticks(range(len(top)))
-    ax.set_yticklabels(names, fontsize=9)
-    ax.set_xlabel("Feature Contribution")
-    ax.set_title(f"Top Feature Contributions: {mutation}")
-    ax.invert_yaxis()
-    fig.tight_layout()
-    return fig
-
-
-def _plot_rg_distributions(
-    rg_wt: np.ndarray,
-    rg_mut: np.ndarray,
+def _plot_importance(
+    top_features: tuple[tuple[str, float], ...],
     mutation: str,
 ) -> plt.Figure:
-    """Plot WT vs mutant Rg distributions."""
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.hist(rg_wt, bins=25, alpha=0.5, density=True,
-            label=f"WT (mean={rg_wt.mean():.1f} A)", color="#4575b4")
-    ax.hist(rg_mut, bins=25, alpha=0.5, density=True,
-            label=f"{mutation} (mean={rg_mut.mean():.1f} A)", color="#d73027")
-    ax.axvline(rg_wt.mean(), color="#4575b4", linestyle="--", alpha=0.7)
-    ax.axvline(rg_mut.mean(), color="#d73027", linestyle="--", alpha=0.7)
-    ax.set_xlabel("Radius of Gyration (A)")
-    ax.set_ylabel("Density")
-    ax.set_title(f"Rg Distribution: WT vs {mutation}")
-    ax.legend()
+    """Plot PCA component importance."""
+    fig, ax = plt.subplots(figsize=(8, 4))
+    names = [f[0] for f in top_features]
+    vals = [f[1] for f in top_features]
+
+    ax.barh(range(len(names)), vals, color="#d73027", alpha=0.8)
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(names, fontsize=9)
+    ax.set_xlabel("Feature Importance (GBRegressor)")
+    ax.set_title(f"Top PCA Components: {mutation}")
+    ax.invert_yaxis()
     fig.tight_layout()
     return fig
 
@@ -277,13 +178,12 @@ def create_app():
         ],
         outputs=[
             gr.Markdown(label="Prediction"),
-            gr.Plot(label="Feature Contributions"),
-            gr.Plot(label="Rg Distribution"),
+            gr.Plot(label="Feature Importance"),
         ],
-        title="Brain IDP Aggregation Predictor",
+        title="IDP Aggregation Predictor",
         description=(
-            "Hybrid model combining ESM-2 embeddings, flow-model structural features, "
-            "and evolutionary constraints (LLR) to predict mutation effects on IDP aggregation."
+            "Predict mutation effects on IDP aggregation using ESM-2 embeddings. "
+            "No structure generation needed. ~1 second per prediction."
         ),
         examples=[
             [ABETA42_WT, "E22G"],

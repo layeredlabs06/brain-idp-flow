@@ -203,6 +203,61 @@ class TestHybridAggregationPredictor:
 # app.py — parse_mutation
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# model/embedding_predictor.py
+# ---------------------------------------------------------------------------
+
+class TestEmbeddingAggregationPredictor:
+    @pytest.fixture
+    def synth(self):
+        np.random.seed(42)
+        n, d = 60, 480
+        emb = np.random.randn(n, d).astype(np.float32)
+        targets = np.random.randn(n).astype(np.float32)
+        return emb, targets
+
+    def test_fit_and_predict(self, synth):
+        from brain_idp_flow.model.embedding_predictor import EmbeddingAggregationPredictor
+        emb, targets = synth
+        p = EmbeddingAggregationPredictor(n_pca=10, n_folds=3)
+        results = p.fit(emb, targets)
+        assert "cv_mean_rho" in results
+        assert p.is_fitted
+        scores = p.predict(emb[:5])
+        assert scores.shape == (5,)
+
+    def test_predict_single(self, synth):
+        from brain_idp_flow.model.embedding_predictor import EmbeddingAggregationPredictor
+        emb, targets = synth
+        p = EmbeddingAggregationPredictor(n_pca=10, n_folds=3)
+        p.fit(emb, targets)
+        result = p.predict_single(emb[0])
+        assert hasattr(result, "score")
+        assert hasattr(result, "risk_level")
+        assert result.risk_level in ("HIGH", "MEDIUM", "LOW")
+        assert len(result.top_features) == 10
+
+    def test_save_load(self, synth, tmp_path):
+        from brain_idp_flow.model.embedding_predictor import EmbeddingAggregationPredictor
+        emb, targets = synth
+        p = EmbeddingAggregationPredictor(n_pca=10, n_folds=3)
+        p.fit(emb, targets)
+        score_before = p.predict(emb[:3])
+
+        path = tmp_path / "model.pkl"
+        p.save(path)
+
+        p2 = EmbeddingAggregationPredictor.load(path)
+        score_after = p2.predict(emb[:3])
+        np.testing.assert_array_almost_equal(score_before, score_after)
+
+    def test_not_fitted_raises(self):
+        from brain_idp_flow.model.embedding_predictor import EmbeddingAggregationPredictor
+        p = EmbeddingAggregationPredictor()
+        with pytest.raises(RuntimeError, match="not fitted"):
+            p.predict(np.zeros((1, 480)))
+
+
 class TestParseMutation:
     def test_valid_mutations(self):
         from brain_idp_flow.app import _parse_mutation
