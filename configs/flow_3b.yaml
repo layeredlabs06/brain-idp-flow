@@ -1,0 +1,37 @@
+# Flow matching training configuration — ESM-2 3B version
+# Requires A100 40GB+ (gradient checkpointing recommended for T4/A100-40GB)
+model:
+  d_model: 512          # wider to handle 2560-dim input
+  n_heads: 8
+  n_layers: 10          # deeper for richer representation
+  d_seq_in: 2560        # ESM-2 3B output dim
+  dropout: 0.1
+  rbf_bins: 16
+  rbf_max: 20.0
+  mutation_embed_dim: 32
+
+training:
+  batch_size: 2         # minimal batch for VRAM constraints
+  grad_accum: 16        # effective batch = 32
+  lr: 3.0e-5            # lower lr for largest model
+  weight_decay: 1.0e-2
+  max_steps: 50000
+  warmup_steps: 3000
+  scheduler: cosine
+  amp: true
+  grad_clip: 1.0
+  ema_decay: 0.999
+  val_every: 500
+  ckpt_every: 2500
+  log_dir: "runs/flow_3b"
+
+data:
+  max_len: 160
+  train_npz: "data/train.npz"
+  val_fraction: 0.1
+  augment_rotation: true
+
+sampling:
+  n_steps: 50
+  method: "euler"
+  n_samples: 200

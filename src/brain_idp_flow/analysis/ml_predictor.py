@@ -19,6 +19,9 @@ from scipy.stats import spearmanr
 FEATURE_KEYS = [
     "llr_site",
     "delta_rg",
+    "delta_rg_650m",
+    "delta_rg_product",
+    "delta_rg_divergence",
     "site_rmsf",
     "site_contact_freq",
     "site_long_range_cf",
@@ -32,6 +35,36 @@ FEATURE_KEYS = [
     "contact_formation_delay",
     "convergence_time_site",
 ]
+
+# Original 14 features (without cross-scale) for backward compatibility
+FEATURE_KEYS_SINGLE_SCALE = [
+    k for k in FEATURE_KEYS
+    if k not in ("delta_rg_650m", "delta_rg_product", "delta_rg_divergence")
+]
+
+
+def add_cross_scale_features(data: list[dict]) -> list[dict]:
+    """Compute cross-scale interaction features from 35M and 650M ΔRg.
+
+    Adds delta_rg_product and delta_rg_divergence to each mutation dict.
+    Requires both delta_rg (35M) and delta_rg_650m to be present.
+
+    Args:
+        data: list of mutation dicts, each containing delta_rg and delta_rg_650m
+
+    Returns:
+        New list of dicts with added cross-scale features (immutable pattern).
+    """
+    enriched = []
+    for d in data:
+        entry = dict(d)
+        drg_35m = d.get("delta_rg")
+        drg_650m = d.get("delta_rg_650m")
+        if drg_35m is not None and drg_650m is not None:
+            entry["delta_rg_product"] = drg_35m * drg_650m
+            entry["delta_rg_divergence"] = abs(drg_35m - drg_650m)
+        enriched.append(entry)
+    return enriched
 
 
 def _build_feature_matrix(
@@ -60,6 +93,12 @@ def _build_feature_matrix(
             arr = np.array(vals, dtype=float)
             if arr.std() > 1e-10:
                 used_keys.append(key)
+
+    if not used_keys:
+        raise ValueError(
+            f"No valid features found. "
+            f"Requested: {feature_keys}, available: {list(data[0].keys()) if data else []}"
+        )
 
     X = np.column_stack([
         np.array([d[key] for d in data], dtype=float)
@@ -446,6 +485,9 @@ def run_lean_composite(
     from sklearn.model_selection import KFold
     from sklearn.preprocessing import StandardScaler
 
+    if not data:
+        raise ValueError("data must not be empty")
+
     # Target: use nucleation_score if available, else log(agg_rate)
     if "nucleation_score" in data[0]:
         y = np.array([d["nucleation_score"] for d in data], dtype=float)
@@ -461,13 +503,26 @@ def run_lean_composite(
     print(f"{'='*60}")
 
     # Feature sets to compare
+    has_650m = all(d.get("delta_rg_650m") is not None for d in data)
+
     feature_sets = {
         "LLR only": ["llr_site"],
         "ΔRg only": ["delta_rg"],
         "LLR + ΔRg": ["llr_site", "delta_rg"],
         "LLR + ΔRg + switching": ["llr_site", "delta_rg", "switching_rate_site", "switching_rate_long_range"],
-        "All available": None,  # uses all non-None features
     }
+
+    if has_650m:
+        feature_sets.update({
+            "ΔRg 650M only": ["delta_rg_650m"],
+            "Cross-scale ΔRg": ["delta_rg", "delta_rg_650m"],
+            "Cross-scale + interaction": ["delta_rg", "delta_rg_650m", "delta_rg_product"],
+            "Cross-scale full": ["delta_rg", "delta_rg_650m", "delta_rg_product", "delta_rg_divergence"],
+            "LLR + cross-scale": ["llr_site", "delta_rg", "delta_rg_650m"],
+            "LLR + cross-scale full": ["llr_site", "delta_rg", "delta_rg_650m", "delta_rg_product", "delta_rg_divergence"],
+        })
+
+    feature_sets["All available"] = None  # uses all non-None features
 
     results = {}
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
