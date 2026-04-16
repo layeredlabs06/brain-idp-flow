@@ -75,7 +75,7 @@ All code and analysis pipelines are publicly available at \url{https://github.co
 % ============================================================
 \section*{Abstract}
 
-Predicting how mutations affect the aggregation propensity of intrinsically disordered proteins (IDPs) is critical for understanding neurodegenerative diseases. Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles from protein language model (PLM) embeddings. Evaluating on deep mutational scanning (DMS) data for amyloid-$\beta$ 42 (A$\beta$42, $n$=751) and islet amyloid polypeptide (IAPP, $n$=661), we discover a scale-dependent direction reversal: $\Delta R_g$ from ESM-2 35M correlates positively with nucleation scores ($\rho$=+0.229), while ESM-2 650M yields a negative correlation ($\rho$=$-$0.219). However, layer-wise linear probing reveals that both PLMs encode aggregation propensity in the \textit{same} positive direction ($\rho$=0.40--0.66 across all layers and scales), demonstrating that the reversal originates not in the PLM representations but in the flow model's conversion of embeddings to three-dimensional structures. Cross-scale CKA analysis shows that 650M late layers have no representational counterpart in 35M, yet both encode nucleation equally well. Combining the opposing $\Delta R_g$ signals from both scales yields a 47\% improvement ($\rho$=0.349, 5-fold CV), but a simple Ridge regression on raw ESM-2 embeddings achieves $\rho$=0.60 without any structure generation---revealing that the flow model loses more information than it adds. These findings demonstrate that generative structure models can systematically distort PLM-encoded biological signals and caution against interpreting structural predictions as faithful reflections of the underlying sequence representations.
+Predicting how mutations affect the aggregation propensity of intrinsically disordered proteins (IDPs) is critical for understanding neurodegenerative diseases. Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles from protein language model (PLM) embeddings. Evaluating on deep mutational scanning (DMS) data for amyloid-$\beta$ 42 (A$\beta$42, $n$=751) and islet amyloid polypeptide (IAPP, $n$=661), we discover a scale-dependent direction reversal: $\Delta R_g$ from ESM-2 35M correlates positively with nucleation scores ($\rho$=+0.229), while ESM-2 650M yields a negative correlation ($\rho$=$-$0.219). However, layer-wise linear probing reveals that both PLMs encode aggregation propensity in the \textit{same} positive direction ($\rho$=0.40--0.66 across all layers and scales), demonstrating that the reversal originates not in the PLM representations but in the flow model's conversion of embeddings to three-dimensional structures. Cross-scale CKA analysis shows that 650M late layers have no representational counterpart in 35M, yet both encode nucleation equally well. Combining the opposing $\Delta R_g$ signals from both scales yields $\rho$=0.349 (5-fold CV), an absolute improvement of $\Delta\rho$=0.112 over the single-scale baseline. Furthermore, supervised Ridge regression on raw ESM-2 embeddings achieves $\rho$=0.40--0.66 (depending on regularization) without any structure generation, demonstrating that PLM embeddings contain substantially more aggregation-relevant information than the flow model's $\Delta R_g$ captures. These findings reveal that generative structure models can systematically distort PLM-encoded biological signals and caution against interpreting structural predictions as faithful reflections of the underlying sequence representations.
 
 % ============================================================
 % Introduction
@@ -90,7 +90,7 @@ Current computational approaches for predicting mutation effects on IDP aggregat
 
 Flow matching generative models have recently emerged as powerful tools for protein conformational ensemble generation. AlphaFlow \cite{jing2024} fine-tunes AlphaFold under a flow matching objective, while P2DFlow \cite{p2dflow2025} introduces SE(3)-equivariant flow matching for ensembles. IDPFold2 \cite{idpfold2_2026} integrates mixture-of-experts into flow matching for IDP-specific ensemble prediction. However, none of these methods have been applied to predict mutation effects on IDP aggregation.
 
-Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles by conditioning on ESM-2 protein language model embeddings. We make four contributions: (1) we demonstrate that $\Delta R_g$ from flow-generated ensembles predicts amyloid nucleation scores, outperforming CANYA and providing information orthogonal to ESM-2 LLR; (2) we discover that the direction of the $\Delta R_g$--nucleation correlation reverses depending on PLM scale, and that combining opposing signals from two scales yields a 47\% improvement ($\rho$=0.349); (3) through layer-wise linear probing and CKA analysis, we show that the reversal originates in the structure generation model, not in the PLM embeddings, which encode aggregation in the same direction across all scales ($\rho$=0.40--0.66); and (4) we demonstrate that raw ESM-2 embeddings outperform the full structural pipeline, revealing a systematic information bottleneck in generative structure models.
+Here we present a conditional flow matching framework that generates mutation-specific conformational ensembles by conditioning on ESM-2 protein language model embeddings. We make four contributions: (1) we discover that the direction of the $\Delta R_g$--nucleation correlation reverses depending on PLM scale, and show through layer-wise probing and CKA analysis that this reversal originates in the flow model's learned mapping, not in the PLM representations themselves; (2) we demonstrate that combining opposing $\Delta R_g$ signals from two scales yields $\rho$=0.349 ($\Delta\rho$=+0.112 over single-scale); (3) we show that supervised probes on raw ESM-2 embeddings achieve $\rho$=0.40--0.66 (depending on regularization), substantially exceeding the unsupervised $\Delta R_g$ ($\rho$=0.23) and revealing that structure generation discards linearly decodable aggregation information; and (4) we validate on two independent amyloid DMS datasets (A$\beta$42 and IAPP).
 
 % ============================================================
 % Results
@@ -130,7 +130,7 @@ ESM-2 Scale & $d_{\text{seq\_in}}$ & $\rho$ & $p$-value & Direction \\
 \label{tab:controlled}
 \end{table}
 
-The direction reversal occurred only with ESM-2 650M, confirming that the sign change is linked to PLM scale, not flow model architecture. This qualitative phase transition between 150M and 650M has not been previously reported \cite{scaling2025,medium_plm2025}. However, as we show below, the origin of this reversal is more subtle than a change in PLM representation.
+The direction reversal occurred only with ESM-2 650M, ruling out flow model architecture (width, depth) as the cause. This narrows the origin to the interaction between PLM scale and the flow model's learned mapping. Crucially, as we show below, the PLM embeddings themselves do not invert the aggregation signal---the reversal arises specifically in how the flow model converts different-scale embeddings into three-dimensional structures.
 
 \subsection*{Cross-scale combination yields 47\% improvement}
 
@@ -167,29 +167,30 @@ This demonstrates that the scale-dependent direction reversal does not originate
 
 To understand the relationship between 35M and 650M representations, we computed linear CKA (Centered Kernel Alignment \cite{kornblith2019}) across all layer pairs (Fig~\ref{fig:cka}). The CKA matrix reveals that 650M early layers (0--10) are representationally similar to 35M mid layers (2--6; CKA$>$0.6), while 650M late layers (15+) have no counterpart in 35M (CKA$<$0.2). Despite this structural divergence, both encode nucleation scores with comparable accuracy---the 650M-specific late-layer representations do not invert the biological signal; they simply encode it through a different representational geometry that the flow model interprets differently.
 
-\subsection*{Raw embeddings outperform the structural pipeline}
+\subsection*{Supervised embedding probes reveal an information gap}
 
-A Ridge regression probe on ESM-2 35M Layer 1 mean-pooled embeddings achieved $\rho$=0.660---nearly double the best cross-scale flow model result ($\rho$=0.349) and triple the single-scale result ($\rho$=0.229). This performance held across PCA dimensionalities:
+To quantify how much aggregation-relevant information the PLM embeddings contain beyond what $\Delta R_g$ captures, we trained supervised Ridge regression probes on nucleation score labels (5-fold CV). ESM-2 35M Layer 1 mean-pooled embeddings achieved $\rho$=0.660. Under conservative PCA-10 regularization (eliminating overfitting concerns at 10 features / 751 samples), the probe still achieved $\rho$=0.396. Both substantially exceed the unsupervised flow model $\Delta R_g$ ($\rho$=0.229), though we emphasize these are not directly comparable: the probe has supervised access to nucleation scores, while $\Delta R_g$ is a label-free structural metric.
 
 \begin{table}[h]
 \centering
-\caption{{\bf Direct embedding probe vs. flow model on A$\beta$42.}}
-\begin{tabular}{llr}
+\caption{{\bf Embedding probes vs. flow model on A$\beta$42.} Top rows are supervised (trained on nucleation scores); bottom rows are unsupervised.}
+\begin{tabular}{llrl}
 \toprule
-Method & Features & CV $\rho$ \\
+Method & Features & $\rho$ & Supervision \\
 \midrule
-ESM-2 35M L1 probe & 480 & 0.660 \\
-ESM-2 650M L2 probe & 1280 & 0.622 \\
-ESM-2 35M L1 probe (PCA-50) & 50 & 0.602 \\
-ESM-2 650M L2 probe (PCA-10) & 10 & 0.426 \\
-LLR + cross-scale flow (GB) & 5 & 0.349 \\
-Flow $\Delta R_g$ 35M & 1 & 0.229 \\
+ESM-2 35M L1 probe & 480 & 0.660 & Supervised \\
+ESM-2 35M L1 (PCA-50) & 50 & 0.602 & Supervised \\
+ESM-2 650M L2 (PCA-10) & 10 & 0.426 & Supervised \\
+ESM-2 35M L1 (PCA-10) & 10 & 0.396 & Supervised \\
+\midrule
+LLR + cross-scale flow (GB) & 5 & 0.349 & Supervised \\
+Flow $\Delta R_g$ 35M & 1 & 0.229 & Unsupervised \\
 \bottomrule
 \end{tabular}
 \label{tab:bottleneck}
 \end{table}
 
-The flow model thus acts as an information bottleneck: it compresses rich 480/1280-dimensional PLM representations into a single scalar ($\Delta R_g$), losing approximately 65\% of the predictive signal. While the flow model provides interpretable structural ensembles, it does so at a substantial cost to predictive accuracy.
+The flow model compresses rich 480/1280-dimensional PLM representations into a single scalar ($\Delta R_g$). While supervised probes and unsupervised $\Delta R_g$ are not directly comparable, the magnitude of the gap ($\rho$=0.40 vs. 0.23 under the most conservative comparison) indicates that substantial aggregation-relevant information is lost in the structure generation step. The flow model provides interpretable structural ensembles, but the $\Delta R_g$ summary statistic is a lossy compression of the underlying biological signal.
 
 \subsection*{Per-residue analysis reveals scale-dependent structural responses}
 
@@ -197,7 +198,7 @@ To understand the mechanistic basis of the direction reversal, we analyzed per-r
 
 \subsection*{Multi-amyloid validation on IAPP}
 
-To test generalization beyond the training distribution, we scored the Badia et al. IAPP DMS dataset \cite{badia2026} ($n$=661 single-point substitutions). IAPP was not included in the PED training data, making this a true out-of-distribution test. $\Delta R_g$ from the 35M flow model showed a significant correlation with IAPP nucleation scores ($\rho$=0.110, $p$=1.3$\times$10$^{-3}$, BH-adjusted $p$=3.1$\times$10$^{-3}$; Fig~\ref{fig:multiamyloid}).
+To test generalization beyond the training distribution, we scored the Badia et al. IAPP DMS dataset \cite{badia2026} ($n$=661 single-point substitutions). IAPP was not included in the PED training data, making this an out-of-distribution test. $\Delta R_g$ from the 35M flow model showed a significant correlation with IAPP nucleation scores ($\rho$=0.110, $p$=1.3$\times$10$^{-3}$, BH-adjusted $p$=3.1$\times$10$^{-3}$; Fig~\ref{fig:multiamyloid}). Cross-scale combination yielded only marginal improvement for IAPP (best LR CV $\rho$=0.121), consistent with the 650M flow model producing near-zero signal for this out-of-distribution protein ($\rho$=0.038).
 
 We also observed a direction asymmetry: $\Delta R_g$ correlates more strongly with slowing mutations ($\rho$=0.172, $p$=1.6$\times$10$^{-4}$) than accelerating mutations ($\rho$=0.096, NS), consistent with findings from Badia et al. \cite{badia2026}.
 
@@ -207,20 +208,21 @@ Flow $\Delta R_g$ (35M) outperformed the recently published CANYA aggregation pr
 
 \begin{table}[h]
 \centering
-\caption{{\bf Method comparison on A$\beta$42 DMS ($n$=751).}}
-\begin{tabular}{llrl}
+\caption{{\bf Method comparison on A$\beta$42 DMS ($n$=751).} Supervised methods (top) are trained on nucleation scores with 5-fold CV; unsupervised methods (bottom) use no label information.}
+\begin{tabular}{lllrl}
 \toprule
-Method & Type & $\rho$ & Note \\
+Method & Type & Supervision & $\rho$ & Note \\
 \midrule
-ESM-2 35M L1 probe & Embedding & 0.660 & 5-fold CV \\
-ESM-2 650M L2 probe & Embedding & 0.622 & 5-fold CV \\
-ESM-2 35M probe (PCA-10) & Embedding & 0.396 & overfit control \\
-LLR + cross-scale (GB) & Composite & 0.349 & 5-fold CV \\
-All-7 features (GB CV) & Composite & 0.285 & 5-fold CV \\
-Flow $\Delta R_g$ (35M) & Structure & 0.229 & single feature \\
-Flow $\Delta R_g$ (650M) & Structure & $-$0.219 & single feature \\
-ESM-2 LLR & Sequence & 0.161 & single feature \\
-CANYA & Sequence & 0.115 & single feature \\
+\multicolumn{5}{l}{\textit{Supervised (trained on nucleation scores, 5-fold CV)}} \\
+ESM-2 35M L1 probe & Embedding & Supervised & 0.660 & 480 features \\
+ESM-2 35M probe (PCA-10) & Embedding & Supervised & 0.396 & 10 features \\
+LLR + cross-scale (GB) & Composite & Supervised & 0.349 & 5 features \\
+\midrule
+\multicolumn{5}{l}{\textit{Unsupervised (no nucleation score labels used)}} \\
+Flow $\Delta R_g$ (35M) & Structure & Unsupervised & 0.229 & single feature \\
+Flow $\Delta R_g$ (650M) & Structure & Unsupervised & $-$0.219 & single feature \\
+ESM-2 LLR & Sequence & Unsupervised & 0.161 & single feature \\
+CANYA & Sequence & Unsupervised & 0.115 & single feature \\
 \bottomrule
 \end{tabular}
 \label{tab:comparison}
@@ -235,7 +237,7 @@ CANYA & Sequence & 0.115 & single feature \\
 
 Our central finding is that generative structure models can systematically distort the biological signals encoded in protein language model embeddings. ESM-2 embeddings at both 35M and 650M scales encode aggregation propensity in the same positive direction ($\rho$=0.40--0.66), yet the flow model converts these into $\Delta R_g$ values with opposite signs. This means the widely observed ``scaling effect'' in our structural predictions is not a property of the PLM representations but an artifact of how the structure generation model interprets them.
 
-The information bottleneck is quantitatively severe: compressing 480-dimensional ESM-2 embeddings ($\rho$=0.66) into a single $\Delta R_g$ scalar ($\rho$=0.23) loses approximately 65\% of predictive signal. This finding has practical implications for the growing number of methods that chain PLM embeddings through generative structure models---the intermediate structure generation step may not preserve the task-relevant information encoded in the embeddings.
+The information loss is substantial: a supervised Ridge probe on 480-dimensional ESM-2 embeddings achieves $\rho$=0.40 (PCA-10, conservative) to $\rho$=0.66 (full features), while the unsupervised $\Delta R_g$ scalar achieves $\rho$=0.23. Although these operate in different regimes---the probe is supervised on nucleation score labels while $\Delta R_g$ requires no labels---the gap demonstrates that the flow model's structural bottleneck discards aggregation-relevant information that is linearly decodable from the embeddings. This has practical implications for the growing number of methods that chain PLM embeddings through generative structure models.
 
 \subsection*{Why does the flow model invert the 650M signal?}
 
@@ -315,7 +317,7 @@ Claude (Anthropic) was used to assist with code development, data analysis pipel
 \begin{figure}[ht]
 \centering
 \includegraphics[width=\textwidth]{44.png}
-\caption{{\bf Controlled experiment confirms PLM representation causes direction reversal.} Three flow models with identical architecture ($d$=256, $L$=6) but different ESM-2 inputs. Direction reversal occurs only with ESM-2 650M, ruling out architectural differences as the cause.}
+\caption{{\bf Controlled experiment isolates PLM scale as a factor in direction reversal.} Three flow models with identical architecture ($d$=256, $L$=6) but different ESM-2 inputs. Direction reversal occurs only with ESM-2 650M, ruling out architectural width/depth as the cause. Note: this does not imply the PLM embeddings themselves encode aggregation in opposite directions---layer-wise probing (Fig~\ref{fig:layerrho}) shows both scales encode aggregation positively.}
 \label{fig:controlled}
 \end{figure}
 
