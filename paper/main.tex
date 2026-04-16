@@ -215,7 +215,7 @@ Hybrid (all) & 59 & 0.587 \\
 \label{tab:hybrid}
 \end{table}
 
-The ablation reveals a striking pattern (Fig~\ref{fig:ablation}): embedding PCA alone achieves $\rho$=0.591, while adding all eight structural features and LLR (Hybrid, 59 features) yields $\rho$=0.587---no improvement and a marginal decrease likely due to noise from uninformative features. Feature importance analysis confirmed this: all top-10 features by Gradient Boosting importance were PCA components; no structural feature ranked in the top 10.
+The ablation reveals a striking pattern (Fig~\ref{fig:ablation}): embedding PCA alone achieves $\rho$=0.591, while adding all eight structural features and LLR (Hybrid, 59 features) yields $\rho$=0.587---no improvement and a marginal decrease likely due to noise from uninformative features. Feature importance analysis confirmed this: all top-10 features by Gradient Boosting importance were PCA components; no structural feature ranked in the top 10. Per-mutation attribution for the fAD mutation D7N showed the same pattern: all 15 top-contributing features were embedding PCA components (Fig~\ref{fig:contribution}).
 
 Out-of-distribution evaluation on $\alpha$-synuclein disease mutations ($n$=14) yielded $\rho$=$-$0.116 ($p$=0.69), indicating that the hybrid model's predictive power does not transfer across proteins. This is consistent with the embedding probe being A$\beta$42-specific and the structural features contributing negligible signal even in-distribution.
 
@@ -399,6 +399,13 @@ Claude (Anthropic) was used to assist with code development, data analysis pipel
 \includegraphics[width=0.8\textwidth]{hybrid_ablation.png}
 \caption{{\bf Hybrid model ablation.} 5-fold CV Spearman $\rho$ for seven feature set variants on A$\beta$42 DMS ($n$=751). Error bars show bootstrap 95\% confidence intervals (2,000 resamples). Red bars: variants containing ESM-2 embeddings; blue bars: structure/sequence features only. Embedding PCA alone ($\rho$=0.591) matches or exceeds the full hybrid model ($\rho$=0.587), demonstrating that flow-derived structural features contribute zero additional predictive signal.}
 \label{fig:ablation}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.8\textwidth]{hybrid_feature_contribution.png}
+\caption{{\bf Feature contributions for fAD mutation D7N.} Top 15 features by Gradient Boosting importance $\times$ feature deviation for the familial Alzheimer's disease mutation D7N. All 15 contributing features are PCA components of ESM-2 embeddings; no structural feature (e.g., $\Delta R_g$, contact entropy, $\beta$-sheet propensity) appears in the ranking, confirming that the hybrid model's predictions are driven entirely by PLM representations.}
+\label{fig:contribution}
 \end{figure}
 
 \end{document}
