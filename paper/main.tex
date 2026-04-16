@@ -215,7 +215,7 @@ Hybrid (all) & 59 & 0.587 \\
 \label{tab:hybrid}
 \end{table}
 
-The ablation reveals a striking pattern: embedding PCA alone achieves $\rho$=0.591, while adding all eight structural features and LLR (Hybrid, 59 features) yields $\rho$=0.587---no improvement and a marginal decrease likely due to noise from uninformative features. Feature importance analysis confirmed this: all top-10 features by Gradient Boosting importance were PCA components; no structural feature ranked in the top 10.
+The ablation reveals a striking pattern (Fig~\ref{fig:ablation}): embedding PCA alone achieves $\rho$=0.591, while adding all eight structural features and LLR (Hybrid, 59 features) yields $\rho$=0.587---no improvement and a marginal decrease likely due to noise from uninformative features. Feature importance analysis confirmed this: all top-10 features by Gradient Boosting importance were PCA components; no structural feature ranked in the top 10.
 
 Out-of-distribution evaluation on $\alpha$-synuclein disease mutations ($n$=14) yielded $\rho$=$-$0.116 ($p$=0.69), indicating that the hybrid model's predictive power does not transfer across proteins. This is consistent with the embedding probe being A$\beta$42-specific and the structural features contributing negligible signal even in-distribution.
 
@@ -392,6 +392,13 @@ Claude (Anthropic) was used to assist with code development, data analysis pipel
 \includegraphics[width=\textwidth]{cka_heatmap.png}
 \caption{{\bf Cross-scale CKA similarity matrix.} Linear CKA between all (35M layer, 650M layer) pairs, computed on mean-pooled representations of 751 A$\beta$42 mutant sequences. The block-diagonal structure shows that 650M layers 0--10 correspond to 35M layers 2--6, while 650M layers 15+ occupy a representational space not captured by the smaller model.}
 \label{fig:cka}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.8\textwidth]{hybrid_ablation.png}
+\caption{{\bf Hybrid model ablation.} 5-fold CV Spearman $\rho$ for seven feature set variants on A$\beta$42 DMS ($n$=751). Error bars show bootstrap 95\% confidence intervals (2,000 resamples). Red bars: variants containing ESM-2 embeddings; blue bars: structure/sequence features only. Embedding PCA alone ($\rho$=0.591) matches or exceeds the full hybrid model ($\rho$=0.587), demonstrating that flow-derived structural features contribute zero additional predictive signal.}
+\label{fig:ablation}
 \end{figure}
 
 \end{document}
